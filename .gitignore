@@ -1,0 +1,38 @@
+# ============================================================
+# Neuro v1.0 .gitignore
+# 只挡「能重新生成的东西」和「隐私 / 密钥」，代码与模板全部入库。
+# ============================================================
+
+# ---- 密钥（最重要：secrets.json 里有真实 API key，绝不能进仓库） ----
+secrets.json
+
+# ---- 运行时产物 ----
+node_modules/
+node/
+python/
+logs/
+*.log
+asr_diag.log
+backend/backend.log
+backend/chat_log.txt
+backend/chat_log.txt.bak*
+cache/
+memory/
+!memory/README.md
+flybridge/state/
+flybridge/data/
+backend/models/
+*.onnx
+__pycache__/
+*.pyc
+.quit_request
+
+# ---- 手工备份 ----
+*.bak
+*.bak.*
+*.bak-*
+
+# ---- 垃圾文件 ----
+Thumbs.db
+desktop.ini
+.DS_Store

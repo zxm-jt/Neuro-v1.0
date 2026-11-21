@@ -1,0 +1,20 @@
+fastapi
+uvicorn
+# edge-tts 必须 >=7.3：低于此版本微软返回 403，文字正常但完全没有声音。
+edge-tts>=7.3
+SpeechRecognition
+numpy
+python-multipart
+websockets
+vosk
+numba
+llvmlite
+scipy
+flybrain
+sherpa-onnx
+faster-whisper
+onnxruntime
+miniaudio
+av
+Pillow
+starlette

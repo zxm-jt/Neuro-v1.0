@@ -1,0 +1,458 @@
+openapi: 3.0.3
+info:
+  title: Neuro Desktop Pet — Voice UX v1 API Contract
+  version: 1.0.0
+  description: |
+    前后端联调唯一依据（spec-as-contract）。前端据此生成 TS 类型 + MSW Mock，后端据此实现。
+
+    范围：Phase 1 语音体验升级（PRD V1 的 F1–F4）+ 其依赖的既有接口。
+    本文件以 `backend/neuro_server.py` 的**实际路由**为基线（已逐行核对），
+    **不包含未实现的虚构端点**；新增/变更项以 `x-status` 标注。
+
+    P0 约束：
+    - 统一响应信封 `{code, data, message}`（新增端点，见 components/schemas/Envelope）；既有端点保留
+      其历史返回结构，由 `x-legacy-shape: true` 标注（**不改既有契约**，避免破坏已跑通的链路）。
+    - 图标：全项目锁定单一 SVG 图标库 **Lucide**（npm 包 `lucide` 1.x，MIT）。
+      本项目为 **vanilla JS + Electron（无 React/无打包器）**，故用 `lucide` 的 `createIcons()` /
+      `lucide-static` 内联 SVG，**不用** `lucide-react`。禁用 emoji 作为功能图标。
+      与设计师 `design-system/design-tokens.json` 的 `iconLibrary: "lucide"`、尺寸 16/20/24px 一致。
+    - 密钥：一律从环境变量读取（`NEURO_LLM_KEY` / `NEURO_VISION_KEY` / `ZHIPUAI_API_KEY`），
+      **不得**出现在请求体、响应体、前端或日志中（见 ADR-006）。
+  contact:
+    name: 高见远 (Architect)
+servers:
+  - url: http://127.0.0.1:6006
+    description: 本地 FastAPI 后端（Electron 主进程启动）
+
+tags:
+  - name: health
+    description: 健康与链路自愈探测
+  - name: voice-stream
+    description: F1 端点判定 / F2 打断 / F3 碎片合并（WebSocket 流式）
+  - name: asr
+    description: F3 ASR 识别
+  - name: tts
+    description: 语音合成
+  - name: vision
+    description: F4 连续屏幕感知
+  - name: chat
+    description: LLM 对话（OpenAI 兼容）
+  - name: voiceprint
+    description: 反逻辑声纹（回声自激防护）
+
+paths:
+
+  /v1/health:
+    get:
+      tags: [health]
+      summary: 健康检查
+      operationId: getHealth
+      responses:
+        '200':
+          description: 服务健康状态
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  version: { type: string }
+
+  /v1/stream-health:
+    get:
+      tags: [health]
+      summary: 流式链路健康（F3 EARS-A5 半开检测）
+      operationId: getStreamHealth
+      responses:
+        '200':
+          description: 流式链路状态与最近错误
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  half_open: { type: boolean }
+                  last_error: { type: string, nullable: true }
+                  degraded_since: { type: number, nullable: true }
+              example:
+                ok: true
+                half_open: false
+                last_error: null
+
+  # ---------------------------------------------------------------------------
+  # F2 / F1 —— 语音流（WebSocket）。既有 /v1/asr_stream，契约以 x-status: extended 描述新增控制帧。
+  # ---------------------------------------------------------------------------
+  /v1/asr_stream:
+    get:
+      tags: [voice-stream]
+      summary: 流式语音链路（WS）— 上行 PCM，下行 事件/文本
+      operationId: asrStream
+      x-transport: websocket
+      x-status: extended
+      description: |
+        既有端点（`neuro_server.py:1661`）。本轮扩展两个**服务端下行控制帧**（不破坏既有帧）：
+
+        1. **F1 端点判定结果** `type: "endpoint"`：
+           - `decision`: `hold`（继续听，句中停顿）| `commit`（已说完，可生成）| `hard_timeout`（3000ms 硬上限）
+           - `silence_ms`: 当前累计静音
+           - 对应 PRD EARS-V1..V4。
+           - 驱动设计师状态层的 `thinking`（commit 后进入）。
+
+        2. **F2 打断确认** `type: "barge_in"`：
+           - `action`: `flush_playback`（前端必须**本地立刻停播**，≤150ms，见 EARS-B2）
+           - `source`: `acoustic`（本地声学层先停）| `voiceband`（后端声纹/频带判定）
+           - `resume_hint`: 被打断的已生成内容偏移（供 EARS-B5 续接）
+           - 驱动设计师状态层的 `interrupt_receipt`（一次性回执，不循环，见 voice-states.md A.5）。
+
+        前端已实现 `js/asr-processor.js` 的本地停播（`BARGE_HOLD_MS=90`），
+        本契约把**后端判定帧**与**前端本地停播**的时序关系固化下来。
+        状态层唯一事实来源：`design-system/pages/voice-states.md`（idle/listening/thinking/speaking/muted + 屏幕感知 + 打断回执）。
+      parameters:
+        - name: sample_rate
+          in: query
+          schema: { type: integer, default: 16000 }
+        - name: engine
+          in: query
+          schema: { type: string, enum: [sensevoice, paraformer], default: sensevoice }
+      responses:
+        '101':
+          description: WebSocket 升级成功
+
+  /v1/ws/vad:
+    get:
+      tags: [voice-stream]
+      summary: 独立 VAD 通道（WS）
+      operationId: vadStream
+      x-transport: websocket
+      x-status: stable
+      description: 既有端点（`neuro_server.py:1538`）。F1 双阈值迟滞参数在此通道生效。
+      responses:
+        '101':
+          description: WebSocket 升级成功
+
+  /v1/asr_stream_stats:
+    get:
+      tags: [asr]
+      summary: 流式 ASR 统计（碎片率/丢弃率埋点，见 PRD 数据埋点）
+      operationId: getAsrStreamStats
+      responses:
+        '200':
+          description: 计数器
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fragment_merged: { type: integer }
+                  fragment_dropped: { type: integer }
+                  asr_error: { type: integer }
+
+  /v1/upload_audio:
+    post:
+      tags: [asr]
+      summary: 上传音频识别（F3 非流式兜底路径）
+      operationId: uploadAudio
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: 识别文本
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AsrResult'
+
+  /v3:
+    post:
+      tags: [tts]
+      summary: 语音合成（Edge TTS 代理）
+      operationId: synthesize
+      parameters:
+        - name: text
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: 音频流
+          content:
+            audio/mpeg:
+              schema: { type: string, format: binary }
+
+  # ---------------------------------------------------------------------------
+  # F4 —— 连续屏幕感知
+  # ---------------------------------------------------------------------------
+  /v1/vision/status:
+    get:
+      tags: [vision]
+      summary: 视觉链路状态
+      operationId: getVisionStatus
+      responses:
+        '200':
+          description: 状态
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  enabled: { type: boolean }
+                  active: { type: boolean }
+                  fps: { type: number }
+                  autopush: { type: boolean }
+                  observations: { type: integer }
+
+  /v1/vision/start:
+    post:
+      tags: [vision]
+      summary: 启动视觉会话（幂等）
+      operationId: startVision
+      responses:
+        '200':
+          description: 启动结果
+
+  /v1/vision/stop:
+    post:
+      tags: [vision]
+      summary: 停止视觉会话
+      operationId: stopVision
+      responses:
+        '200':
+          description: 停止结果
+
+  /v1/vision/ask:
+    post:
+      tags: [vision]
+      summary: 对当前画面提问（F4 EARS-S4）
+      operationId: askVision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                question: { type: string, default: "What is on the screen?" }
+      responses:
+        '200':
+          description: 回答
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  text: { type: string }
+
+  /v1/vision/observations:
+    get:
+      tags: [vision]
+      summary: 取回视觉观察（含去重/主动沉默结果，F4 EARS-S1/S2）
+      operationId: getVisionObservations
+      responses:
+        '200':
+          description: 观察列表
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  observations:
+                    type: array
+                    items: { $ref: '#/components/schemas/Observation' }
+                  context: { type: string }
+
+  /v1/vision_frames:
+    get:
+      tags: [vision]
+      summary: 桌面帧上传通道（WS，F4 本地抽帧主链路）
+      operationId: pushVisionFrames
+      x-transport: websocket
+      x-status: stable
+      description: |
+        既有端点（`neuro_server.py:2987`）。协议（内部约定，非标准）：
+        - 客户端连接后先发文本 JSON `{"type":"hello"}`
+        - 之后每条**二进制**消息 = 一张 JPEG 帧
+        - 服务端回 `{"type":"status", state: ready|streaming|not_started|unavailable, ...}`
+        前端 `js/vision-pump.js` 是发送方（1fps / maxEdge 1280 / q62），
+        **当前在 `main.js` 中无引用（孤儿）** —— F4 的首要工作是接线，见 ADR-004。
+      responses:
+        '101':
+          description: WebSocket 升级成功
+
+  /v1/vision_speak:
+    get:
+      tags: [vision]
+      summary: 她主动发言订阅通道（WS）
+      operationId: subscribeVisionSpeak
+      x-transport: websocket
+      x-status: stable
+      responses:
+        '101':
+          description: WebSocket 升级成功
+
+  # ---------------------------------------------------------------------------
+  # 对话
+  # ---------------------------------------------------------------------------
+  /v2/chat/completions:
+    post:
+      tags: [chat]
+      summary: 对话（OpenAI ChatCompletions 兼容代理）
+      operationId: chatCompletions
+      x-legacy-shape: true
+      description: |
+        既有端点（`neuro_server.py:3155`）。`stream: true` 返回 SSE。
+        含图片的 messages 走视觉分支（`VISION_MODEL`）。
+        工具调用当前为自研 `[[TOOL:{...}]]` 文本协议（见 ADR-005），
+        响应正文中可能包含该标记 —— 前端必须解析并**不播报**。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChatRequest'
+      responses:
+        '200':
+          description: 对话结果（非流式为 JSON，流式为 text/event-stream）
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChatResponse'
+            text/event-stream:
+              schema:
+                type: string
+
+  /v1/voiceprint/enroll:
+    post:
+      tags: [voiceprint]
+      summary: 录入声纹（F2 EARS-B4 回声自激防护 / F3 EARS-A3 回环拒绝）
+      operationId: enrollVoiceprint
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                pcm: { type: string, description: base64 编码的 16k mono PCM }
+      responses:
+        '200':
+          description: 录入结果
+
+  /v1/voiceprint/profile:
+    get:
+      tags: [voiceprint]
+      summary: 查询声纹档案
+      operationId: getVoiceprintProfile
+      responses:
+        '200':
+          description: 档案状态
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  enrolled: { type: boolean }
+                  similarity_threshold: { type: number, default: 0.72 }
+
+  /v1/memory/context:
+    get:
+      tags: [chat]
+      summary: 当前记忆上下文
+      operationId: getMemoryContext
+      responses:
+        '200':
+          description: 上下文
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+
+components:
+  schemas:
+
+    Envelope:
+      type: object
+      description: 新增端点统一响应信封（既有端点见 x-legacy-shape）。
+      required: [code, data]
+      properties:
+        code: { type: integer, description: 0=成功，非 0=错误码 }
+        data: { nullable: true }
+        message: { type: string, description: 错误时的人类可读描述 }
+
+    AsrResult:
+      type: object
+      properties:
+        text: { type: string }
+        lang: { type: string, nullable: true }
+        duration_ms: { type: integer }
+
+    Observation:
+      type: object
+      description: 一次视觉观察（已过相似度去重，见 config vision.free.observation_dup_similarity=0.82）
+      properties:
+        text: { type: string }
+        ts: { type: number, description: Unix 秒 }
+        importance: { type: number, minimum: 0, maximum: 1 }
+        suppressed: { type: boolean, description: true=主动沉默，不生成发言（EARS-S2） }
+
+    ChatRequest:
+      type: object
+      required: [messages]
+      properties:
+        model: { type: string, example: deepseek-flash }
+        messages:
+          type: array
+          items:
+            type: object
+            required: [role]
+            properties:
+              role: { type: string, enum: [system, user, assistant] }
+              content:
+                oneOf:
+                  - type: string
+                  - type: array
+                    items: { type: object, additionalProperties: true }
+        stream: { type: boolean, default: false }
+        max_tokens: { type: integer, example: 700 }
+        temperature: { type: number, example: 0.95 }
+        top_p: { type: number, example: 0.95 }
+
+    ChatResponse:
+      type: object
+      properties:
+        id: { type: string }
+        object: { type: string, example: chat.completion }
+        model: { type: string }
+        choices:
+          type: array
+          items:
+            type: object
+            properties:
+              index: { type: integer }
+              message:
+                type: object
+                properties:
+                  role: { type: string }
+                  content: { type: string }
+              finish_reason: { type: string }
+
+  securitySchemes:
+    {}
+x-icon-library:
+  name: lucide
+  package: lucide
+  usage: createIcons() / lucide-static 内联 SVG（vanilla JS，无 React）
+  license: MIT
+  sizes: [16, 20, 24]
+  rule: 全项目唯一图标来源；禁止 emoji 作功能图标（与 design-system/design-tokens.json 一致）

@@ -1,0 +1,69 @@
+# ============================================================
+# Neuro 桌宠 .gitignore
+# 原则：只把「能重新生成的东西」和「别人的东西/隐私」挡在外面，
+#       代码、配置模板、Live2D 模型、字体、vendor 库全部入库。
+# ============================================================
+
+# ---- 运行时 / 第三方（几百 MB，可重装） ----
+node_modules/
+node/
+npm-debug.log*
+.npm/
+
+# ---- 便携工具与部署副本 ----
+SSH/
+portable-tools/tools/
+userData/
+portable
+
+# ---- 大数据与模型权重 ----
+backend/models/
+*.onnx
+*.zip
+tests/audio/
+_archive/
+backup/
+backup_*/
+_backup_*/
+_ref/
+.workbuddy/
+__pycache__/
+*.pyc
+
+# ---- 日志与运行时产物 ----
+logs/
+*.log
+backend/backend.log
+backend/chat_log.txt
+backend/chat_log.txt.bak*
+
+# ---- 记忆与隐私（属于「用户数据」，不进版本库，靠便携同步备份） ----
+memory/
+!memory/README.md
+
+# ---- 手工备份（现在由 git 接管） ----
+*.bak
+*.bak.*
+*.bak-*
+
+# ---- 垃圾文件 ----
+--disable-gpu
+Thumbs.db
+desktop.ini
+.DS_Store
+.quit_request
+
+# ---- 密钥（A2 落地后启用） ----
+secrets.json
+# ---- 果蝇脑桥的运行时数据（膜电位/记忆/情绪簇，不进版本库） ----
+flybridge/state/
+flybridge/heads/default.json
+flybridge/__pycache__/
+flybridge/data/
+python/
+# ASR 模型（228MB，自行下载）
+backend/models/sensevoice/*.onnx
+
+cache/
+*.log
+.verified.json

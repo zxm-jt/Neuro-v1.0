@@ -1,0 +1,2348 @@
+<!doctype html>
+<meta charset="utf-8">
+
+<style>
+  * { box-sizing: border-box; margin:0; padding:0; }
+  /* 【2026-11-07 隐藏滑块】用户要求"聊天房滑块改成隐藏"：
+     滚动条完全不可见，但滚轮/触摸/键盘滚动功能保留。 */
+  ::-webkit-scrollbar { width:0; height:0; display:none; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  ::-webkit-scrollbar-thumb { background:transparent; border:none; }
+  ::-webkit-scrollbar-corner { background:transparent; }
+  html, body { height:100%; overflow:hidden; background:#0d1212; color:#8a9a9a;
+    font:12px/1.6 "Bahnschrift","Noto Sans SC","Microsoft YaHei",Consolas,sans-serif;
+    letter-spacing:.4px; }
+  /* 背景：墨绿青灰渐变 + 星点 + 顶部靛蓝能量线（还原壁纸质感） */
+  body { background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(63,83,142,.14), transparent 60%),
+      radial-gradient(900px 500px at 10% 110%, rgba(67,81,81,.35), transparent 60%),
+      linear-gradient(180deg, #0e1414, #0a0f0f 70%, #0c1113);
+    position:relative; display:flex; flex-direction:column; }
+  /* 【2026-11-07 背景图】可选：叠加一张图片当背景。
+     修复三问题（2026-11-07 晚）：
+       ① 壁纸挡住背景 → opacity .3 → .13（13% 淡染，底色渐变重新主导）
+       ② 比例失真     → background-size cover → contain（保持原比例，不拉伸不裁切）
+       ③ 缩放太大     → contain 保证整图完整显示，最大不超过窗口，不再放大铺满
+     效果：图片居中完整显示，四周留出底色渐变，颜色互相融合不互相覆盖。 */
+  #bgimg { position:fixed; inset:0; z-index:0; pointer-events:none;
+    background-size:contain; background-position:center;
+    background-repeat:no-repeat; opacity:.13; filter:saturate(.85) brightness(1.05); }
+  body::before { content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background-image:
+      radial-gradient(1px 1px at 20% 30%, rgba(154,168,200,.4) 50%, transparent 51%),
+      radial-gradient(1px 1px at 70% 20%, rgba(154,168,200,.3) 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 40% 70%, rgba(63,83,142,.4) 50%, transparent 51%),
+      radial-gradient(1px 1px at 85% 55%, rgba(154,168,200,.25) 50%, transparent 51%),
+      radial-gradient(1.2px 1.2px at 55% 90%, rgba(63,83,142,.35) 50%, transparent 51%),
+      radial-gradient(1px 1px at 92% 80%, rgba(154,168,200,.2) 50%, transparent 51%);
+  }
+  /* 顶部靛蓝能量线 */
+  body::after { content:""; position:fixed; top:0; left:0; right:0; height:2px; z-index:1;
+    background:linear-gradient(90deg, transparent, #3f538e 30%, #6a7fc0 50%, #3f538e 70%, transparent);
+    opacity:.8; box-shadow:0 0 12px rgba(63,83,142,.5); }
+
+  /* —— 顶栏：大标题 + 动态时钟 + 状态条 + 人格/CLOSE —— */
+  header { position:relative; z-index:2; padding:14px 24px 10px;
+    display:flex; align-items:flex-start; justify-content:space-between; gap:16px; }
+  .brand { display:flex; flex-direction:column; gap:2px; }
+  .brand h1 { font-size:30px; font-weight:600; letter-spacing:6px; color:#b8c4e0;
+    text-shadow:0 0 18px rgba(63,83,142,.6), 0 0 40px rgba(63,83,142,.3);
+    font-family:"Bahnschrift","Noto Sans SC","Microsoft YaHei",sans-serif; }
+  .brand .sub { font-size:10px; letter-spacing:3px; color:#5a6a8a; text-transform:uppercase; }
+  .clock { text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
+  .clock .time { font-size:30px; font-weight:300; color:#aab8d8; letter-spacing:3px;
+    font-variant-numeric:tabular-nums; text-shadow:0 0 14px rgba(63,83,142,.5); }
+  .clock .date { font-size:11px; color:#5a6a8a; letter-spacing:2px; text-transform:uppercase; }
+  .clock .week { font-size:10px; color:#3f538e; letter-spacing:2px; }
+
+  .statusbar { position:relative; z-index:2; display:flex; align-items:center; gap:14px;
+    padding:5px 24px; border-top:1px solid rgba(67,81,81,.25); border-bottom:1px solid rgba(67,81,81,.25);
+    background:transparent; font-size:10px; letter-spacing:1.2px; }
+  .dot { width:6px; height:6px; border-radius:50%; background:#2a3a3a; display:inline-block; }
+  .dot.on { background:#6a7fc0; }
+  .dot.off { background:#a05050; }
+  .tag { color:#5a6a8a; } .val { color:#8a9a9a; }
+  .sep { width:1px; height:12px; background:rgba(67,81,81,.35); }
+
+  /* —— 人格输入 + CLOSE（顶栏下方一条，横跨全宽）—— */
+  .roombar { position:relative; z-index:2; display:flex; align-items:center;
+    justify-content:space-between; gap:12px; padding:6px 24px; }
+  .persona { display:flex; align-items:center; gap:8px; }
+  .persona .lbl { font-size:10px; color:#4a5a5a; letter-spacing:1.5px; }
+  .persona input { font:11px/1.4 "Bahnschrift","Noto Sans SC","Microsoft YaHei",Consolas,sans-serif;
+    color:#5a6a7a; background:rgba(10,14,14,.25); border:1px solid rgba(67,81,81,.25);
+    padding:3px 6px; width:48px; text-align:center; border-radius:2px; outline:none;
+    -moz-appearance:textfield; appearance:textfield; }
+  .persona input::-webkit-outer-spin-button,
+  .persona input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+  .persona input:focus { border-color:#3f538e; }
+  .persona .hint { font-size:10px; color:#3a4a4a; letter-spacing:1px; }
+  button.ctl { font:10px/1.4 "Bahnschrift","Noto Sans SC","Microsoft YaHei",Consolas,sans-serif;
+    color:#5a6a8a; background:transparent; border:none;
+    padding:5px 10px; cursor:pointer; letter-spacing:1.5px; }
+  button.ctl:hover { color:#9aa8c8; }
+  button.close { color:#8a6868; }
+  button.close:hover { color:#b08080; }
+  /* 【2026-11-07 背景图】BG 按钮：换背景图 / 恢复纯色背景 */
+  button.bgbtn { color:#4a5a5a; background:transparent; border:none;
+    padding:5px 10px; cursor:pointer; letter-spacing:1.5px; font-size:10px; }
+  button.bgbtn:hover { color:#8898b8; }
+  /* 【2026-11-07 去亮化】CLOSE NEURO 与 BG PICK/BG NONE 同款：无边框无背景，只有字体。
+     输入框调暗（背景 .25、边框 .25、文字 #5a6a7a），并隐藏 number 输入框的上下箭头
+     （spinner 会让人误以为是滑块、亮度也偏高）。 */
+  button.close, button.close:active { background:transparent; border:none;
+    box-shadow:none; outline:none; font:10px/1.4 "Bahnschrift","Noto Sans SC","Microsoft YaHei",Consolas,sans-serif;
+    padding:5px 10px; letter-spacing:1.5px; }
+  button.close:hover { box-shadow:none; }
+
+  /* =====================================================================
+     【2026-11-14 隐藏模式】点 HIDE 后：只留左下对话框，背景图 100% 不透明。
+     整体仍沿用墨绿青灰暗色系，不引入新的高亮色。
+     ===================================================================== */
+  /* HIDE/SHOW 按钮 —— 原与 .ctl/.bgbtn 同款顶部纯文字；2026-11-15 移到右下角 */
+  button.hide { font:10px/1.4 "Bahnschrift","Noto Sans SC","Microsoft YaHei",Consolas,sans-serif;
+    color:#5a6a8a; background:rgba(10,15,15,.66); border:1px solid rgba(67,81,81,.35);
+    padding:7px 14px; cursor:pointer; letter-spacing:1.5px; border-radius:3px;
+    position:fixed; right:14px; bottom:14px; z-index:8;
+    box-shadow:0 0 10px rgba(0,0,0,.3); }
+  button.hide:hover { color:#9aa8c8; border-color:rgba(63,83,142,.5); background:rgba(14,20,26,.78); }
+  button.hide.on { color:#9aa8c8; border-color:rgba(63,83,142,.55); }
+  /* 隐藏态：收起顶栏、状态条、persona、bgwrap 里其它按钮、roombar 整体、文件树、终端。
+     HIDE 按钮已独立 fixed 到右下角（2026-11-15），隐藏态下自动留在原地（SHOW）。 */
+  body.hidden-mode header,
+  body.hidden-mode .statusbar,
+  body.hidden-mode .roombar,
+  body.hidden-mode .slot-fs,
+  body.hidden-mode .term { display:none; }
+  /* 隐藏态：stage 让出全宽给左下对话框（对话框贴左下角） */
+  /* 【2026-11-21 隐藏态重设计】用户要求：隐藏后对话框背景也隐藏（只显示文字）、
+     整个框拉得更小、贴左下角。实现：slot-chat 去 .panel 底/边框（inherit 到透明），
+     cap/xlateresult 也藏掉（隐藏态只留纯文字）；容器 fixed 贴左下、宽高收紧；
+     hover 时淡淡补一层底色，让文字在任何背景上都能读，又不常驻显示。 */
+  body.hidden-mode .stage { grid-template-columns:1fr; grid-template-rows:1fr;
+    margin:0; position:fixed; left:18px; bottom:18px; width:auto; height:auto;
+    min-width:240px; max-width:420px; max-height:34vh; }
+  body.hidden-mode .slot-chat { grid-column:1; grid-row:1; height:auto; min-height:0;
+    background:transparent; border-color:transparent; }
+  /* 隐藏态：标题栏（译/原文按钮）一并藏掉，纯文字悬浮 */
+  body.hidden-mode .slot-chat .cap,
+  body.hidden-mode .slot-chat .xlateresult { display:none; }
+  /* 隐藏态：chatbody 裁掉内边距，文字紧贴角落 */
+  body.hidden-mode .chatbody { padding:2px 6px 4px 0; }
+  /* 隐藏态：hover 时淡淡补一层底色，兼顾可读性 */
+  body.hidden-mode .slot-chat:hover { background:rgba(8,12,12,.55);
+    border-color:rgba(67,81,81,.18); border-radius:3px; }
+  /* 隐藏态：文字加一点柔和投影，浅色背景上仍可读 */
+  body.hidden-mode .chatbody .msg { text-shadow:0 1px 3px rgba(0,0,0,.75); }
+  /* 隐藏态：exitlog 若被触发，同样保持无底色 */
+  body.hidden-mode .exitbody { background:transparent; }
+  /* 隐藏态：背景图 100% 不透明、居中完整显示 */
+  body.hidden-mode #bgimg { opacity:1; filter:saturate(.95) brightness(1.0); }
+
+  /* =====================================================================
+     【2026-11-14 翻译按钮】对话框标题栏旁的小按钮：复制当前文字供翻译。
+     ===================================================================== */
+  button.xlate { margin-left:auto; font:10px/1.4 "Bahnschrift","Noto Sans SC","Microsoft YaHei",Consolas,sans-serif;
+    color:#5a6a8a; background:none; border:none; padding:2px 6px; cursor:pointer; letter-spacing:1.5px; }
+  button.xlate:hover { color:#9aa8c8; }
+  button.xlate.copied { color:#6a9a7a; }
+  /* 【2026-11-14 翻译结果条】显示在对话框标题栏下方，译文/原文切换 */
+  .xlateresult { flex:none; padding:6px 12px; font:11px/1.55 "Bahnschrift","Noto Sans SC","Microsoft YaHei",Consolas,sans-serif;
+    color:#aab8d8; background:rgba(14,20,26,.55); border-bottom:1px solid rgba(67,81,81,.2);
+    white-space:pre-wrap; word-break:break-word; max-height:140px; overflow-y:auto; }
+  .xlateresult .xlate-lbl { font-size:9px; color:#4a5a5a; letter-spacing:1.5px;
+    text-transform:uppercase; margin-right:6px; }
+
+  /* =====================================================================
+     【2026-11-14 无边框自绘标题栏】frameless 窗口顶部 hover 才显示的自绘标题栏。
+     平时完全隐藏（上移 + 透明 + 不拦截鼠标）；鼠标滑到顶部 44px 热区才浮现，
+     提供拖动 + 最小化 + 关闭。风格与整体墨绿青灰一致。
+     ===================================================================== */
+  #titlebar { position:fixed; top:0; left:0; right:0; height:34px; z-index:10;
+    display:flex; align-items:center; justify-content:space-between;
+    background:linear-gradient(180deg, rgba(14,20,20,.96), rgba(10,15,15,.85));
+    border-bottom:1px solid rgba(67,81,81,.3);
+    opacity:0; transform:translateY(-100%); pointer-events:none;
+    transition:opacity .22s ease, transform .22s ease;
+    -webkit-app-region:drag; }
+  #titlebar .ttl { font:10px/1.4 "Bahnschrift","Noto Sans SC",Consolas,sans-serif;
+    color:#5a6a8a; letter-spacing:3px; text-transform:uppercase; padding-left:14px;
+    user-select:none; }
+  #titlebar .ttl b { color:#8898b8; font-weight:600; }
+  #titlebar .winctl { display:flex; align-items:stretch; height:100%;
+    -webkit-app-region:no-drag; }
+  #titlebar .winctl button { width:44px; height:100%; background:transparent; border:none;
+    color:#5a6a8a; font:13px/1 "Bahnschrift",Consolas,sans-serif; cursor:pointer;
+    letter-spacing:0; }
+  #titlebar .winctl button:hover { background:rgba(63,83,142,.18); color:#9aa8c8; }
+  #titlebar .winctl button.wclose:hover { background:rgba(160,80,80,.28); color:#c08080; }
+  /* 顶部热区提示条：仅作视觉提示，不拦截鼠标（真实显示逻辑走 JS mousemove） */
+  #titlehot { position:fixed; top:0; left:0; right:0; height:28px; z-index:11;
+    pointer-events:none; }
+
+  /* —— 六板块主区：2 行 × 3 列 —— */
+  .stage { position:relative; z-index:2; flex:1; min-height:0; margin:0 14px 14px;
+    display:grid; grid-template-columns: 250px 1.6fr 1.6fr; grid-template-rows: 1.1fr 1fr;
+    gap:10px; }
+  .panel { background:rgba(10,14,14,.35); border:1px solid rgba(67,81,81,.18);
+    border-radius:3px; min-width:0; min-height:0; display:flex; flex-direction:column; overflow:hidden; }
+  .panel .cap { padding:6px 14px; color:#5a6a8a; font-size:10px; letter-spacing:3px;
+    text-transform:uppercase; display:flex; align-items:center; gap:10px;
+    border-bottom:1px solid rgba(67,81,81,.15); flex:none; }
+  .panel .cap::before { content:""; width:14px; height:1px; background:#3f538e; opacity:.5; }
+
+  /* 左上：文件管理面板（VSCode 式文件树） */
+  /* 【2026-11-07 修 —— 目录太多挤掉对话】slot-fs 是 grid 子项里唯一没设
+     min-height:0 的：目录一多，fsbody 内容把格子撑高 → grid 第 1 行被顶开、
+     第 2 行的对话流被挤出视口，且内部滚动跟着失效。
+     补 min-height:0 后 fsbody 老老实实在格子内部滚动，目录再多也不挤对话。 */
+  .slot-fs { grid-column:1; grid-row:1; min-height:0; min-width:0; display:flex; flex-direction:column;
+    border:1px solid rgba(67,81,81,.18); border-radius:3px; background:rgba(10,14,14,.35); }
+  .fshead { display:flex; align-items:center; gap:6px; padding:4px 8px;
+    border-bottom:1px solid rgba(67,81,81,.15); flex:none; }
+  .fshead .fs-path { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; font-size:10px; color:#5a6a8a; letter-spacing:1px; }
+  .fshead .fs-path-input { flex:1; min-width:0; font:10px/1.4 "Bahnschrift",Consolas,sans-serif;
+    color:#8a9a9a; background:rgba(10,14,14,.5); border:1px solid rgba(63,83,142,.4);
+    padding:2px 6px; border-radius:2px; outline:none; letter-spacing:1px; }
+  .fshead .fs-path-input:focus { border-color:#6a7fc0; }
+  .fsbtn { font:9px/1.2 "Bahnschrift",Consolas,sans-serif; color:#4a5a5a;
+    background:none; border:none; padding:1px 6px; cursor:pointer; letter-spacing:1px; }
+  .fsbtn:hover { color:#8a9ab8; }
+  .fsbody { flex:1; overflow-y:auto; padding:4px 4px 8px; min-height:0;
+    scrollbar-width:thin; scrollbar-color:#2a3a3a #0d1212; overscroll-behavior:contain; }
+  .fsrow { display:flex; align-items:center; gap:4px; padding:1px 6px;
+    font-size:10.5px; color:#7a8a8a; cursor:default; white-space:nowrap;
+    border-radius:2px; min-width:0; }
+  .fsrow:hover { background:rgba(63,83,142,.12); color:#9aa8c8; }
+  .fsrow.dir { color:#8898b8; }
+  .fsrow .fs-ic { flex:none; width:14px; text-align:center; color:#4a5a5a; }
+  .fsrow.dir .fs-ic { color:#6a7fc0; }
+  /* 【2026-11-08 面板宽度定死】目录名/文件名超出面板宽度时省略号截断，
+     不再把 grid 列撑宽。完整文字通过悬停浮层展示（title 属性）。 */
+  .fsrow .fs-name { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .fsrow .fs-del { margin-left:auto; flex:none; color:#6a4a4a; display:none;
+    font-size:9px; padding:0 3px; }
+  .fsrow:hover .fs-del { display:inline; }
+  .fsrow .fs-del:hover { color:#b08080; }
+  /* 【2026-11-14 内部文件预览】点文本文件在聊天房内查看，不弹系统程序。
+     预览面板嵌在文件树下方，点文件后展开；风格与整体墨绿青灰一致。 */
+  .fspreview { flex:none; max-height:40%; min-height:0; display:none;
+    flex-direction:column; border-top:1px solid rgba(67,81,81,.25);
+    background:rgba(8,12,12,.5); }
+  .fspreview.show { display:flex; }
+  .fspreview .fshead { border-bottom:1px solid rgba(67,81,81,.15); }
+  .fspreview .fshead .fs-path { color:#6a7fc0; }
+  .fspreview .fsclose { font:9px/1.2 "Bahnschrift",Consolas,sans-serif; color:#4a5a5a;
+    background:none; border:none; padding:1px 6px; cursor:pointer; letter-spacing:1px; }
+  .fspreview .fsclose:hover { color:#8a9ab8; }
+  .fspreview .fsview { flex:1; overflow:auto; padding:6px 10px; min-height:0;
+    font:11px/1.55 "Consolas","Noto Sans SC","Microsoft YaHei",monospace;
+    color:#8a9a9a; white-space:pre-wrap; word-break:break-all;
+    scrollbar-width:thin; scrollbar-color:#2a3a3a #0d1212; overscroll-behavior:contain; }
+  .fspreview .fsview.err { color:#b08080; }
+  .fsroot-lbl { padding:3px 6px 0; font-size:9px; color:#3a4a4a; letter-spacing:1px; }
+
+  /* 左下：对话流（收窄、左对齐） */
+  .slot-chat { grid-column:1; grid-row:2; }
+  .chatbody { flex:1; overflow-y:auto; padding:6px 10px 12px; white-space:pre-wrap;
+    word-break:break-word; user-select:text; -webkit-user-select:text;
+    scrollbar-width:none; scrollbar-color:transparent transparent; }
+  /* 【2026-11-08 退出显性输出】退出流程层：覆盖对话区，琥珀金等宽字。
+     只在有播报时由 __render 打开 display:block，平时完全不占位。 */
+  .exitbody { display:none; position:absolute; inset:30px 0 0 0; z-index:5;
+    overflow-y:auto; padding:10px 12px; white-space:pre-wrap; word-break:break-word;
+    background:rgba(8,12,12,.96); color:#c9a227;
+    font:10.5px/1.6 "Bahnschrift","Noto Sans SC","Microsoft YaHei",monospace;
+    letter-spacing:.4px; scrollbar-width:thin; scrollbar-color:#2a3a3a #0d1212; }
+  .slot-chat { position:relative; }
+  .chatbody ::selection, .chatbody::selection { background:#2a3a5a; color:#dce8f0; }
+  .msg { padding:1px 8px 1px 2px; margin:1px 0; border-left:2px solid transparent;
+    font-size:10.5px; line-height:1.45; letter-spacing:.4px; }
+  .msg.cmd  { border-left-color:#3f538e; color:#a8b4cc; }
+  .msg.neuro { border-left-color:#3a4a4a; color:#7a8a8a; }
+  /* 未播到的台词：只占一行高度，无任何文字（等语音播到才逐词出现） */
+  .msg.neuro.hold { opacity:.18; border-left-color:#232f2f; }
+  .msg.sys  { border-left-color:#2a3a3a; color:#5a6a8a; }
+  .msg.desktop { border-left-color:#5a6a8a; color:#8898b8; }
+  .msg.vision { border-left-color:#3f538e; color:#6a7ab0; }
+  .msg.err { border-left-color:#a05050; color:#b08080; }
+
+  /* 中央四大块：终端（2×2） */
+  .term { grid-column:2 / 4; grid-row:1 / 3; }
+  .termbox { flex:1; display:flex; flex-direction:column; min-height:0; }
+  #termout { flex:1; overflow-y:auto; padding:10px 16px 16px; white-space:pre-wrap;
+    word-break:break-word; user-select:text; -webkit-user-select:text;
+    font-family:Consolas,"Cascadia Mono","Noto Sans SC","Microsoft YaHei",monospace;
+    font-size:12.5px; line-height:1.8; scrollbar-width:none; scrollbar-color:transparent transparent; }
+  #termout .t-user { color:#5f5036; }
+  #termout .t-ok  { color:#4a7a58; }
+  #termout .t-err { color:#a87878; }
+  #termout .t-dim { color:#4a5a5a; }
+  #termout .t-bold { font-weight:700; }
+  #terminput { display:flex; align-items:center; gap:10px; border-top:1px solid rgba(67,81,81,.15);
+    padding:8px 16px; background:rgba(10,14,14,.4); flex:none; }
+  #termps { color:#5f5036; font-family:Consolas,"Cascadia Mono",monospace; font-size:12px; white-space:pre; }
+  #termline { flex:1; background:none; border:none; outline:none; color:#8898b8;
+    font-family:Consolas,"Cascadia Mono","Noto Sans SC","Microsoft YaHei",monospace; font-size:12.5px; }
+  #termline::placeholder { color:#3a4a4a; }
+  /* 【2026-11-08 C++ 输入面板】用户要求：写 C++ 代码不在底部操作栏输入，
+     而是在上方的面板输入。CPP 模式时源码编辑器显示在 termout 上方，PS 模式隐藏。 */
+  /* 【2026-11-08 C++ 面板放大】flex 从 1.15 提到 1.7：C++ 模式源码区占满模块，
+     输出区被压到下方窄条。用户还可拖分隔条手动调。 */
+  #cppeditor { display:none; flex:1.7; min-height:0; resize:none; border:none; outline:none;
+    padding:10px 16px; background:rgba(8,12,12,.55); color:#9ab8c8; caret-color:#b8c4e0;
+    font-family:Consolas,"Cascadia Mono","Noto Sans SC","Microsoft YaHei",monospace;
+    font-size:12.5px; line-height:1.7; white-space:pre; overflow:auto;
+    scrollbar-width:none; scrollbar-color:transparent transparent; }
+  #cppeditor.on { display:block; }
+  /* 【2026-11-08 视觉检查】cpp_visual_inspect 时短暂描边，方便她在截图里认出代码区 */
+  #cppeditor.cppflash { box-shadow: inset 0 0 0 2px rgba(106,190,160,.55); }
+  #cppeditor::placeholder { color:#3a4a4a; }
+  /* 【2026-11-08 可拖动分隔条】拖动它调整 C++ 编辑区与输出区的高度。
+     向上拖 = 编辑区变矮（盖住代码），向下拖 = 编辑区变高、直到底部。 */
+  #dragbar { display:none; flex:none; height:6px; cursor:ns-resize;
+    background:rgba(63,83,142,.22); border-top:1px solid rgba(63,83,142,.35);
+    border-bottom:1px solid rgba(63,83,142,.35); }
+  #dragbar.on { display:block; }
+  #dragbar:hover { background:rgba(106,127,192,.45); }
+  /* 【2026-11-07 v5 降亮度】RUN / DEBUG 改成与 CLEAR 同款：无边框、无背景、
+     9px 暗灰纯文字，只有悬停才提亮。旧版亮绿/亮蓝 + 发光太抢眼。 */
+  .runbar { display:none; margin-left:auto; align-items:center; gap:2px; }
+  .runbar.on { display:inline-flex; }
+  .runbtn { margin-left:0; font:9px/1.2 "Bahnschrift",Consolas,sans-serif;
+    font-weight:500; color:#4a5a5a; background:none; border:none;
+    padding:1px 8px; cursor:pointer; letter-spacing:1px; }
+  .runbtn:hover { color:#8a9ab8; }
+  /* CLEAR 紧贴 RUN/DEBUG 按钮组（runbar 已用 margin-left:auto 把整组推到右边） */
+  #termclear { margin-left:0; }
+  .capbtn { margin-left:auto; font:9px/1.2 "Bahnschrift",Consolas,sans-serif;
+    color:#4a5a5a; background:none; border:none; padding:1px 8px;
+    cursor:pointer; letter-spacing:1px; }
+  .capbtn:hover { color:#8a9ab8; }
+  /* 【2026-11-07 C++ 编译模式】模式切换按钮：PS / CPP 高亮态 */
+  .modebtn { font:9px/1.2 "Bahnschrift",Consolas,sans-serif; color:#4a5a5a;
+    background:none; border:1px solid rgba(67,81,81,.25); padding:2px 8px;
+    cursor:pointer; letter-spacing:1px; border-radius:2px; margin-left:8px; }
+  .modebtn:hover { color:#8a9ab8; border-color:#3f538e; }
+  .modebtn.on { color:#9aa8c8; border-color:#3f538e; box-shadow:inset 0 0 6px rgba(63,83,142,.15); }
+  .modehint { font-size:9px; color:#3a4a4a; letter-spacing:1px; }
+  /* 【2026-11-07 逐词打字机】正在逐词揭示的台词高亮 */
+  .msg.neuro .typing { color:#b8c4e0; }
+  .msg.neuro .typing::after { content:"▍"; color:#3f538e; animation:blink 1s step-end infinite; }
+  @keyframes blink { 0%,100% { opacity:1 } 50% { opacity:0 } }
+</style>
+
+<style>
+  /* 触发按钮：和 PERSONA / BG 同排，默认不显眼 */
+  #brainbtn { font:9px/1.2 "Bahnschrift",Consolas,sans-serif; letter-spacing:1px;
+    color:#4a5a5a; background:none; border:1px solid rgba(74,90,90,.5);
+    padding:2px 8px; border-radius:3px; cursor:pointer; }
+  #brainbtn:hover { color:#8a9ab8; border-color:rgba(106,127,192,.6); }
+  #brainbtn.on { color:#a8c8ff; border-color:rgba(106,127,192,.8); }
+
+  /* 面板：浮在左侧文件树与对话流之间，默认隐藏 */
+  .brainviz {
+    position:fixed; right:18px; top:120px; width:380px;
+    background:rgba(8,10,14,.92); border:1px solid rgba(63,83,142,.45);
+    border-radius:4px; z-index:1200; display:none;
+    box-shadow:0 8px 24px rgba(0,0,0,.5); backdrop-filter:blur(4px);
+  }
+  .brainviz.on { display:block; }
+  .brainviz .bh { display:flex; align-items:center; gap:6px;
+    padding:5px 8px; border-bottom:1px solid rgba(63,83,142,.3);
+    font:9px/1.4 "Bahnschrift",Consolas,sans-serif; color:#7a8aa8; letter-spacing:1px; }
+  .brainviz .bh .sp { margin-left:auto; color:#5a6a8a; }
+  .brainviz .bh .x { background:none; border:none; color:#4a5a5a; cursor:pointer;
+    font-size:11px; padding:0 2px; }
+  .brainviz .bh .x:hover { color:#b08080; }
+  #brain3d { display:block; width:380px; height:320px; cursor:grab; touch-action:none; }
+  #brain3d:active { cursor:grabbing; }
+  .brainviz .bhint { padding:0 8px 6px; font:9px/1.4 Consolas,monospace; color:#3f4f6a; }
+  .brainviz .bf { display:flex; gap:10px; padding:4px 8px 6px;
+    font:9px/1.4 Consolas,monospace; color:#5f6f8f; }
+  .brainviz .bf b { color:#8fa8d8; font-weight:500; }
+  .brainviz .bf .off { color:#7a4a4a; }
+</style>
+
+<div id="bgimg"></div>
+
+<div id="titlehot"></div>
+<div id="titlebar">
+  <div class="ttl"><b>NEURO</b> · Chat Room</div>
+  <div class="winctl">
+    <button id="winmin" title="最小化">─</button>
+    <button id="winclose" class="wclose" title="关闭">×</button>
+  </div>
+</div>
+
+<header>
+  <div class="brand">
+    <h1>NEURO</h1>
+    <div class="sub">Chat Room · Private Link</div>
+  </div>
+  <div class="clock">
+    <div class="time" id="clock">--:--:--</div>
+    <div class="date" id="date">----.--.--</div>
+    <div class="week" id="week">----</div>
+  </div>
+</header>
+
+<div class="statusbar">
+  <span class="dot" id="d1"></span><span class="tag">BACKEND</span><span class="val" id="s1">--</span>
+  <span class="sep"></span>
+  <span class="dot" id="d2"></span><span class="tag">VISION</span><span class="val" id="s2">--</span>
+  <span class="sep"></span>
+  <span class="tag">FRAMES</span><span class="val" id="s3">--</span>
+  <span class="sep"></span>
+  <span class="dot" id="d3"></span><span class="tag">TERM</span><span class="val" id="s4">--</span>
+</div>
+
+<div class="roombar">
+
+  <div class="persona">
+    <span class="lbl">PERSONA</span>
+    <input id="persona" type="number" min="0" max="1" step="0.05" value="0.85">
+    <button class="ctl" id="persona-set">SET</button>
+    <button id="brainbtn" title="显示/隐藏她的脑放电">BRAIN</button>
+  </div>
+  <div class="bgwrap">
+    <button class="bgbtn" id="bgpick">BG PICK</button>
+    <button class="bgbtn" id="bgclear">BG NONE</button>
+    <button class="close" id="close">CLOSE NEURO</button>
+  </div>
+</div>
+
+<button class="hide" id="hide" title="隐藏/显示">HIDE</button>
+
+<div class="brainviz" id="brainviz">
+  <div class="bh">
+    <span>FLY BRAIN · 3D SPIKES</span>
+    <span class="sp" id="brainstate">--</span>
+    <button class="x" id="brainviz-close" title="关闭">×</button>
+  </div>
+  <canvas id="brain3d" width="380" height="320"></canvas>
+  <div class="bf">
+    <span>spont <b id="bv-spont">--</b></span>
+    <span>kc <b id="bv-kc">--</b></span>
+    <span>mbon <b id="bv-mbon">--</b></span>
+    <span>hz <b id="bv-hz">--</b></span>
+  </div>
+  <div class="bhint">拖拽旋转 · 滚轮缩放 · 双击复位</div>
+</div>
+
+<div class="stage">
+
+  <div class="slot-fs">
+    <div class="fshead">
+      <span class="fs-path" id="fspath">--</span>
+      <input class="fs-path-input" id="fspath-input" type="text" spellcheck="false"
+        placeholder="输入路径后回车" style="display:none">
+      <button class="fsbtn" id="fsroot">ROOT</button>
+      <button class="fsbtn" id="fsup">↑</button>
+      <button class="fsbtn" id="fsnew">+</button>
+    </div>
+    <div class="fsbody" id="fsbody"></div>
+
+    <div class="fspreview" id="fspreview">
+      <div class="fshead">
+        <span class="fs-path" id="fspreview-path">--</span>
+        <button class="fsclose" id="fspreview-close">CLOSE</button>
+      </div>
+      <div class="fsview" id="fspreview-body"></div>
+    </div>
+  </div>
+
+  <div class="panel slot-chat">
+    <div class="cap">Conversation
+      <button class="xlate" id="xlate" title="用鼠标圈选字幕里的几个词（可只选一个词），点此按钮，这几个词就地变成译文">译</button>
+      <button class="xlate" id="xshow" title="显示原文：清除所有翻译，恢复字幕原始内容">原文</button>
+    </div>
+
+    <div class="xlateresult" id="xlateresult" style="display:none"></div>
+    <div class="chatbody" id="chat"></div>
+
+    <div class="exitbody" id="exitlog"></div>
+  </div>
+
+  <div class="panel term">
+    <div class="cap">POWER TERMINAL
+      <button class="modebtn on" id="mode-ps">PS</button>
+      <button class="modebtn" id="mode-cpp">C++</button>
+      <span class="modehint" id="modehint">PowerShell</span>
+      <span class="runbar" id="runbar">
+        <button class="runbtn run" id="cpprun">▶ RUN</button>
+        <button class="runbtn dbg" id="cppdbg">⚙ DEBUG</button>
+      </span>
+      <button class="capbtn" id="termclear">CLEAR</button>
+    </div>
+    <div class="termbox">
+      <textarea id="cppeditor" spellcheck="false" autocomplete="off" wrap="off"
+        placeholder="// C++ 源码编辑区：在这里写代码，点上方 ▶ RUN 编译运行，⚙ DEBUG 带调试信息编译"></textarea>
+      <div id="dragbar" title="拖动调整编辑区高度：向上盖住代码，向下拖到底部"></div>
+      <div id="termout"></div>
+      <div id="terminput"><span id="termps">PS&gt;</span><input id="termline" spellcheck="false" autocomplete="off" placeholder="输入命令，回车执行（exit 退出）"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// 动态时钟：每秒走字，日期/星期一起显示
+function tick() {
+  var d = new Date();
+  var p = function(n){ return (n < 10 ? '0' : '') + n; };
+  document.getElementById('clock').textContent =
+      p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  var weeks = ['SUNDAY','MONDAY','TUESDAY','WEDNESDAY','THURSDAY','FRIDAY','SATURDAY'];
+  document.getElementById('date').textContent =
+      d.getFullYear() + '.' + p(d.getMonth()+1) + '.' + p(d.getDate());
+  document.getElementById('week').textContent = weeks[d.getDay()];
+}
+tick(); setInterval(tick, 1000);
+
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function lineClass(s){
+  if (/^\[.*\] user:/.test(s)) return 'user';
+  // 【2026-11-15 统一身份】视觉=她的眼睛，她看到屏幕后说的话跟主对话是同一个
+  // Neuro。后端已把视觉插话落盘为 "neuro"（不再有 "neuro(识图)"）。这里仍兼容
+  // 旧日志里残留的 "neuro(识图)" 历史行 —— 一并归到 neuro 样式，颜色完全统一，
+  // 不再有"两个身份"的割裂感。
+  if (/^\[.*\] neuro(?:\(识图\))?:/.test(s)) return 'neuro';
+  if (/\[desktop\]/.test(s)) return 'desktop';
+  if (/\[vision\]/.test(s)) return 'vision';
+  if (/error|失败|异常|Error|Traceback/i.test(s)) return 'err';
+  return 'sys';
+}
+// =====================================================================
+// 【2026-11-21 跨行翻译 · 纯函数模块】无 DOM 依赖；页面逻辑与
+// tests/check_chatroom_xlate.js 共用同一份实现（下面标记区间内的代码会被
+// 测试原样抽出执行，请勿在里面引用 document / window.__lastChat 等外部状态）。
+//
+// 根因备忘：DOM 里每行 .msg 的可见文本 = 原始行（含 "[时间] 说话人: " 前缀），
+// 跨行圈选 getSelection().toString() 就是各行文本用空白相连 —— 里面【含】
+// 中间行的前缀。旧版拿"剥掉前缀的 bare 文本"去匹配 → 永远对不上 → 跨行翻译
+// 定位失败；即使定位成功，替换时同样对不上 → 译文写不回字幕。这里统一改成
+// 用【原始行文本】拼接匹配，同时保留单行 / 多层历史前缀的兼容兜底。
+// ==== XLATE_PURE_START ====
+(function (root) {
+  'use strict';
+  function collapse(s){ return String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); }
+
+  // 行首前缀：支持多层方括号（"[上次会话] [21:22:01] neuro: "）与 "[--] session: "
+  var PREFIX_RE = /^(?:\[[^\]]*\]\s*)*(?:\[--\]\s*)?(\S+):\s*/;
+  function prefixOf(line){
+    var m = String(line == null ? '' : line).match(PREFIX_RE);
+    return m ? m[0] : '';
+  }
+  function bare(line){ return collapse(String(line == null ? '' : line).replace(PREFIX_RE, '')); }
+
+  // 兜底用：把选区里【中间行】残留的 "[时间] 说话人: " 前缀剥掉，
+  // 用于 "DOM 文本与原始行不完全一致"（hold / typing 行）时的兼容匹配。
+  function stripEmbeddedPrefixes(s){
+    return collapse(String(s == null ? '' : s).replace(/(?:\[[^\]]*\]\s*)*(?:\[--\]\s*)?[^\s:]+:\s*/g, ' '));
+  }
+
+  // 在 lines 里找 needle 覆盖的最小行区间；textOf 决定匹配用的文本形态。
+  // 不再用 "累计长度 + 40/60 字符" 的 break 判断（起点行可能远长于选区，
+  // 一 break 就断链，跨两条对话的圈选拼不到后面）—— 行数 ≤60，全扫无压力。
+  function findSpan(arr, needle, textOf){
+    for (var s = arr.length - 1; s >= 0; s--){
+      var acc = textOf(arr[s]);
+      if (!acc) continue;
+      if (acc.indexOf(needle) >= 0) return { s: s, e: s };
+      for (var e = s + 1; e < arr.length; e++){
+        var t = textOf(arr[e]);
+        if (!t) continue;                    // hold / 被翻译清空的行：DOM 里也没文字
+        acc = acc + ' ' + t;
+        if (acc.indexOf(needle) >= 0) return { s: s, e: e };
+      }
+    }
+    return null;
+  }
+  function segAt(ranges, p){
+    for (var q = 0; q < ranges.length; q++){ if (p < ranges[q].b) return q; }
+    return ranges.length - 1;
+  }
+
+  // 定位选区：返回 { startIdx, endIdx, sel } 或 null。
+  // 永远由调用方传入【原文】lines（__rawChat），避免译文干扰对位。
+  function locate(lines, selRaw){
+    var arr = Array.isArray(lines) ? lines : [];
+    var sel = collapse(selRaw);
+    if (!sel) return null;
+    // ① 单行命中：原始行直接 indexOf（DOM 单行选区不含前缀，天然是子串）
+    for (var i = arr.length - 1; i >= 0; i--){
+      var line = collapse(arr[i]);
+      if (line && line.indexOf(sel) >= 0) return { startIdx: i, endIdx: i, sel: sel };
+    }
+    // ② 跨行：拿【原始行文本】拼接（含中间行前缀）—— 与 DOM 选区同构
+    var f = findSpan(arr, sel, collapse);
+    if (f) return { startIdx: f.s, endIdx: f.e, sel: sel };
+    // ③ 兜底：剥掉选区里中间行的前缀后，与 bare 行拼接匹配
+    var selBare = stripEmbeddedPrefixes(sel);
+    if (selBare && selBare !== sel){
+      f = findSpan(arr, selBare, bare);
+      if (f) return { startIdx: f.s, endIdx: f.e, sel: selBare };
+    }
+    // ④ 兜底：原样选区 vs bare 行拼接（前缀格式怪异时）
+    f = findSpan(arr, sel, bare);
+    if (f) return { startIdx: f.s, endIdx: f.e, sel: sel };
+    return null;
+  }
+
+  // 就地替换：把 lines[startIdx..endIdx] 里 sel 覆盖的文字换成 translated。
+  // 行数不变（中间行清空为 ''），打字机游标 idx 与显示数组始终对齐。
+  function applyRange(lines, startIdx, endIdx, sel, translated){
+    if (!Array.isArray(lines) || startIdx < 0 || startIdx >= lines.length) return false;
+    var ei = Math.min(Math.max(endIdx, startIdx), lines.length - 1);
+    var needle = collapse(sel), dst = collapse(translated);
+    if (!needle || !dst) return false;
+    // 依次尝试 raw / bare 两种文本形态（与 locate 的匹配路径一致）
+    var modes = [collapse, bare];
+    for (var mi = 0; mi < modes.length; mi++){
+      var textOf = modes[mi], segs = [], ranges = [], cursor = 0;
+      for (var k = 0; k <= ei - startIdx; k++){
+        var t = textOf(lines[startIdx + k]);
+        segs.push(t);
+        ranges.push({ a: cursor, b: cursor + t.length });
+        cursor += t.length + 1;              // +1 = 拼接用的单空格
+      }
+      var joined = segs.join(' ');
+      var pos = joined.indexOf(needle);
+      if (pos < 0) continue;
+      var endPos = pos + needle.length;
+      var ss = segAt(ranges, pos), es = segAt(ranges, Math.max(pos, endPos - 1));
+      var out = [];
+      for (var n = 0; n < segs.length; n++){
+        var orig = lines[startIdx + n];
+        var pf = (textOf === bare) ? prefixOf(orig) : '';  // bare 模式要把前缀补回
+        if (n < ss || n > es){ out.push(orig); continue; } // 区间外保持原样
+        if (ss === es){
+          out.push(pf + segs[n].slice(0, pos - ranges[n].a) + dst
+                   + segs[n].slice(endPos - ranges[n].a));
+        } else if (n === ss){
+          out.push(pf + segs[n].slice(0, pos - ranges[n].a) + dst);
+        } else if (n === es){
+          out.push(segs[n].slice(endPos - ranges[n].a));    // 尾行保留命中之后的文字
+        } else {
+          out.push('');                                     // 中间行清空，不增删行
+        }
+      }
+      for (var w = 0; w < out.length; w++) lines[startIdx + w] = out[w];
+      return true;
+    }
+    return false;
+  }
+
+  // 【2026-11-21 三修 · 两条对话一起翻译】把一个【跨行选区】按行切成若干
+  // 独立"待译片段"，每行一段。旧版把整个跨行选区当成【一段】送去翻译，
+  // 译文整坨塞进首行、其余行清空 —— 用户看到的就是"只翻译了这一个对话，
+  // 另一个对话不见了"。新版：一次圈选 N 条对话 → 切成 N 段 → 分别翻译 →
+  // 各自写回各自那一行，两条对话都留下、都在自己位置，行数不变。
+  //
+  // 返回 [{ idx, text }]：idx=行号，text=该行被圈中的【去前缀】文本（干净，
+  // 可直接送翻译接口，也能被 applyRange 在原文行里重新定位）。
+  function splitTargets(lines, startIdx, endIdx, selRaw){
+    var arr = Array.isArray(lines) ? lines : [];
+    var needle = collapse(selRaw);
+    if (!needle || startIdx < 0 || startIdx >= arr.length) return [];
+    var ei = Math.min(Math.max(endIdx, startIdx), arr.length - 1);
+    // 两种文本形态都试：原始行(带前缀)用原样选区；bare 行用剥掉中间前缀的选区。
+    var modes = [
+      { textOf: collapse, sel: needle },
+      { textOf: bare,     sel: stripEmbeddedPrefixes(needle) }
+    ];
+    var segs = [], ranges = [], cursor = 0, pos = -1, useLen = 0;
+    for (var mi = 0; mi < modes.length; mi++){
+      segs = []; ranges = []; cursor = 0;
+      for (var k = 0; k <= ei - startIdx; k++){
+        var t = modes[mi].textOf(arr[startIdx + k]);
+        segs.push(t); ranges.push({ a: cursor, b: cursor + t.length });
+        cursor += t.length + 1;
+      }
+      var joined = segs.join(' ');
+      pos = joined.indexOf(modes[mi].sel);
+      if (pos >= 0){ useLen = modes[mi].sel.length; break; }
+    }
+    if (pos < 0) return [];
+    var endPos = pos + useLen;
+    var out = [];
+    for (var n = 0; n < segs.length; n++){
+      var oa = Math.max(pos, ranges[n].a), ob = Math.min(endPos, ranges[n].b);
+      if (ob <= oa) continue;                         // 这一行没被圈到
+      var piece = collapse(segs[n].slice(oa - ranges[n].a, ob - ranges[n].a));
+      piece = collapse(piece.replace(PREFIX_RE, '')); // 去掉可能带入的说话人前缀
+      if (piece) out.push({ idx: startIdx + n, text: piece });
+    }
+    return out;
+  }
+
+  // 把全部 overlay 套到【原文】上，返回新数组（不改入参）。
+  // 定位永远基于 base（干净原文），所以多次翻译能正确叠加；某条 overlay
+  // 找不到原文（日志滚动/原文被冲掉）就跳过，绝不因此让字幕白屏。
+  // overlay 可选带 idx（行号）：优先用它定位（两条对话文字相同时不错位），
+  // 但该行文字必须对得上，日志滚动后失效就回落到全局 locate。
+  function applyOverlay(baseLines, overlays){
+    var base = Array.isArray(baseLines) ? baseLines : [];
+    var out = base.slice();
+    if (!Array.isArray(overlays) || !overlays.length) return out;
+    for (var k = 0; k < overlays.length; k++){
+      var o = overlays[k];
+      if (!o || !o.src || !o.dst) continue;
+      var loc = null;
+      if (typeof o.idx === 'number' && o.idx >= 0 && o.idx < base.length
+          && collapse(base[o.idx]).indexOf(o.src) >= 0){
+        loc = { startIdx: o.idx, endIdx: o.idx, sel: o.src };
+      }
+      if (!loc) loc = locate(base, o.src);
+      if (!loc) continue;
+      applyRange(out, loc.startIdx, loc.endIdx, loc.sel, o.dst);
+    }
+    return out;
+  }
+
+  root.__xlatePure = {
+    collapse: collapse, bare: bare, prefixOf: prefixOf,
+    locate: locate, applyRange: applyRange, applyOverlay: applyOverlay,
+    splitTargets: splitTargets
+  };
+})(typeof window !== 'undefined' ? window : globalThis);
+// ==== XLATE_PURE_END ====
+var __sig = {};
+var __paused = false;
+// 【2026-11-08 智能自动滚动】用户是否在翻看往期记录。
+//   true  → 新台词不强制滚到底（尊重用户在看的位置）
+//   false → 正常自动跟随（在底部就滚到底）
+// 用户滚回底部自动解除；初始 false（刚加载跟随到底）。
+var __userScrolledUp = false;
+var __lastAtBottom = true;   // 上一轮是否在底部（用于区分"主动上翻"与"加载中"）
+// 【2026-11-07 逐词打字机】全局打字机状态
+//   __typer.idx —— 当前正在逐词揭示的句子在 chat 数组里的下标
+//   __typer.words —— 该句按空格切好的词数组
+//   __typer.shown —— 已揭示的词数（每 tick 推进，被打断则停住）
+//   __typer.frozen —— 被打断（true）或已揭示完（false）时停住
+var __typer = { idx: -1, words: [], shown: 0, frozen: true, lineSig: '', mode: 'fixed' };
+// 【2026-11-08 打断锁 / 2026-11-21 改】被打断后，TTS 会 stop（playing/speaking 归零），
+// 若继续套用"整轮说完补齐整句"的规则，就会把台词刷成整句，违背"打断时停在那词"。
+// 打断置 true → 冻结打字机；【2026-11-21】解锁改由 8s 过期 + segToken 新段推进，
+// 不再依赖 seg 文本判断（文本判定会在前后切句不一致时永久锁死）。
+var __ttsInterruptLock = false;
+var __ttsInterruptLockAt = 0;
+// 【2026-11-08 语音活跃期】最近 8 秒内收到过 TTS 进度 → 说明她正在语音对话。
+// 活跃期内由 TTS 进度严格驱动字幕，【未播到的台词不渲染文字】；超过 8 秒
+// 无进度（纯文本输入 / TTS 桥不可用）才退回整行显示，保证字幕不会永远空着。
+var __ttsLastAt = 0;
+// 【2026-11-08 三修 —— "先整句、再取消、再逐词重打"的根治】
+// 旧实现：__ttsLive() 是 12 秒硬窗口，gating = 时间窗口 && 曾播过。
+//   静默期（她在想 / 你在打字）只要超过 12 秒，闸门就【自行关闭】→ 刚写进
+//   chat_log 的 neuro 行被判成 full（整句显示）；等 TTS 真正开播、进度推来，
+//   游标移到这一行 → 又变回 typing、从 0 词重新揭示 → 视觉上就是
+//   "先把整句亮出来，然后取消掉，再一个一个词蹦出来"。
+// 新实现：闸门一旦开启（= 确实收到过播放进度）就【保持开启】，不按时间自行关闭。
+//   日志早于语音落盘是常态，那些"还没播到的行"由 __lineMode 判成 hold（空占位），
+//   完全交给实时进度推进 —— 这样永不会出现"整句先亮"。
+//   纯文本对话（从未收到过任何播放进度）仍然是整行显示，字幕不会永远空着。
+var __ttsEverPlaying = false;
+var __HOLD_MAX_MS = 12000;   // 未播行静默容忍上限：超过则放开闸门（防字幕永久空白）
+var __holdSince = 0;         // "存在未播行"的起始时刻（0 = 当前没有未播行）
+// 【2026-11-21 根修】游标生存期追踪：游标（__typer.idx）最近一次变化的时间戳。
+// 进度帧活跃但游标卡死（seg 匹配不上）时，靠它强制开闸，字幕不再永久 hold。
+var __holdCursorIdx = -1;
+var __holdCursorAt = 0;
+function __ttsLive(){ return (Date.now() - __ttsLastAt) < __HOLD_MAX_MS; }
+function __ttsGating(){ return __ttsEverPlaying; }   // 不再吃时间窗口 → 静默期不会闪整句
+// 【看门狗】存在未播行（hold）却长时间拿不到任何进度 → TTS 合成失败/进度桥断开，
+// 放开闸门把台词显示出来，保证字幕不会永久空着。
+// 正常语音轮次的段间合成间隙远短于 __HOLD_MAX_MS，不会误触发。
+function __holdWatchdog(hasHold){
+  if (!hasHold){ __holdSince = 0; return false; }
+  var now = Date.now();
+  if (!__holdSince) __holdSince = now;
+  // 期间只要来过一次进度，就重置计时
+  // 【2026-11-21 注】这正是旧漏洞：进度帧活跃但游标定位失败时，这里无限重置。
+  // 补救由 paint() 里的"游标生存期"硬逃生舱完成（30s 游标不动即开闸）。
+  if (__ttsLastAt > __holdSince){ __holdSince = now; return false; }
+  return (now - __holdSince) > __HOLD_MAX_MS;
+}
+// 词块切分：保留词间空白（逐词蹦出时文字不会粘连、整体不跳变）
+function __splitWords(s) {
+  var m = String(s).match(/\S+\s*/g) || [];
+  return m.map(function(w){ return w.replace(/\s+$/, ''); });
+}
+// 【作用】把"字符播放比例"换算成"已揭示词数"。
+// app.js 上报的 frac = revealed/total 是【逐字符】比例，旧版直接
+// Math.round(words.length*frac) 当成词比例 → 长词慢、短词快，常有 1~2 词误差。
+// 这里按每个词的累计字符数定位，词边界与真实播放位置对齐。
+function __shownByCharFrac(words, body, frac){
+  if (frac >= 1) return words.length;
+  if (frac <= 0) return 0;
+  var targetChars = Math.floor(String(body).length * frac);
+  var acc = 0, n = 0;
+  for (var i = 0; i < words.length; i++){
+    acc += words[i].length + 1;             // +1 = 词间空格
+    if (acc > targetChars + 1) break;
+    n = i + 1;
+  }
+  return Math.min(words.length, n);
+}
+function hasSelection(){
+  try { var s = window.getSelection(); return !!(s && !s.isCollapsed && String(s).length); }
+  catch(e){ return false; }
+}
+// 作用：判定"这一行是不是新增的 neuro 台词"（需要逐词揭示的候选）
+// 聊天房数据是整行注入：一条新台词进来时，它在 chat 里的行号一定 >= 旧尾部。
+// 只对【上一次渲染后新出现的 neuro 行】做打字机；user/sys 行立即整行显示。
+function __typerStart(lines, startIdx) {
+  // 找到第一条"在 __typer 进度之后"的 neuro 台词
+  for (var i = Math.max(startIdx, __typer.idx + 1); i < lines.length; i++) {
+    if (/^\[.*\] neuro:/.test(lines[i])) {
+      var words = __splitWords(lines[i].replace(/^\[.*\] neuro:\s*/, ''));
+      if (words.length < 2) continue;   // 太短（"。" 之类）直接整行显示
+      __typer = { idx: i, words: words, shown: __ttsLive() ? 0 : 1, frozen: false, lineSig: lines[i], _startedAt: Date.now(), mode: 'fixed' };
+      return;
+    }
+  }
+  // 【2026-11-08 修】找不到新台词时【不要冻结当前打字机】。
+  // 原来这里无条件 frozen=true：只要新增一条 user/sys 行让内容签名变化，
+  // 正在逐词揭示的台词就会被冻在半句、永远显示不完（纯文本兜底路径尤其明显）。
+  // 保持原状态继续揭示，才符合"一句一句说完整"的预期。
+}
+// 【2026-11-21 根治】把桌宠 TTS 的真实播放进度映射到聊天房打字机 —— 按粉色字幕机制。
+// 主进程提供 { segToken, seg, frac, playing, speaking, interrupting }：
+//   segToken —— 段级稳定令牌（粉色字幕 ttsProcessor._segToken，段切换/打断必增）
+//   seg      —— 当前段文本（仅无 segToken 时的兼容兜底用）
+//   frac     —— 该段已播放比例 0~1（_curSegRevealed/_curSegTotal，与粉色字幕同源）
+//   playing  —— 音频是否真的在播；speaking —— 整轮是否还在说（含合成/排队间隙）
+//
+// 【为什么彻底删掉 seg 文本匹配】
+//   后端 chat_log 按句末标点切分 + _clean_final_text 清洗；前端 tts-processor
+//   另一套切句 + 情绪标签清洗。两边措辞/标点/空格/切点都不同 → 归一化模糊匹配
+//   几乎必然失配，只能靠"保持游标 / 前移一行 / 从后往前找"一长串 fallback；
+//   一旦游标已是最后一行就 return false → 新落盘的行永远 hold → 字幕卡死。
+//   现在改用 segToken：新段到来即【顺序推进】到下一条未播 neuro 行，
+//   不依赖任何文本一致性；shown 由 frac 单调决定，进度快慢=揭示快慢。
+//
+// 【根治 慢 / 提前 / 语速快于渲染】
+//   · shown 完全由 frac 决定，不再用固定步长 → 语速多快字幕就多快，不会慢半拍；
+//   · 语音尚未开口（playing=false 且 frac≈0）时冻结在 0 词 → 不会"还没说就渲染出来"；
+//   · 整轮结束（speaking=false 且播放已停止）才补齐整句。
+// 返回是否发生了变化（供调用方决定要不要立即重绘）。
+function __normSpeech(s){
+  return String(s || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fff]/g, '');
+}
+// 【2026-11-21 根治】最近一次见到的段级令牌（粉色字幕 _segToken 同源）。
+// 令牌变化 = 新音频段开始 → 游标顺序推进到下一条未播 neuro 行。
+var __lastSegToken = 0;
+function __applyTtsProgress(tts, lines){
+  if (!tts || !lines || !lines.length) return false;
+  var ts = Number(tts.ts) || 0;
+  // 【2026-11-08 二修】陈旧进度一律不应用（阈值 3s→1.2s，并拒绝时间戳倒退）。
+  // 旧版 3 秒太宽：上一轮的"轮末终态"在静默期被每秒轮询反复套用，
+  // 把刚落盘的新台词一次刷成整句，随后新一轮开播又缩回 0 词 ——
+  // 这正是用户看到的"先输出整段话，再一个一个单词蹦出来"。
+  if (ts && (Date.now() - ts > 1200)) return false;
+  if (ts && __lastProgressTs && ts < __lastProgressTs) return false;
+  if (ts) __lastProgressTs = ts;
+  if (ts > __ttsLastAt) __ttsLastAt = ts;
+  var playing = !!tts.playing, speaking = !!tts.speaking;
+  // 【2026-11-08 二次修 —— 打断即时冻结（不等 1s 轮询的 interruptAt）】
+  // 打断时 app.js 的进度帧会带 interrupting:true。此时 playing/speaking 已
+  // 归零，若走下面"轮末终态补齐"分支，会把刚被打断的台词刷成整句 ——
+  // 用户要的是"打断时停在那一个词"。这里优先处理打断标记：
+  //   冻结当前正在逐词揭示的行 + 置打断锁，后续进度一律不再推进。
+  if (tts.interrupting){
+    if (__typer.idx >= 0 && !__typer.frozen){
+      __typer.frozen = true;
+      __typer.pendingRender = false;
+      __ttsInterruptLock = true;
+      __ttsInterruptLockAt = Date.now();
+    }
+    return __progressMoved();   // 打断也是"有效推进"
+  }
+  // 【2026-11-08 三修】speaking=true 也要开闸门：TTS 合成/排队期
+  // playing=false 但整轮已启动，日志此时往往已落盘 N 句。若只认 playing，
+  // 闸门没开 → paint 把这些"还没播到"的句子全部整行显示 = 整段先闪出来。
+  if (playing || speaking) __ttsEverPlaying = true;
+  // 【2026-11-21 修】打断锁必须会过期：旧版只在新一段开播时才解除，
+  // 若下一轮是同文本/没有新进度，锁会一直挂着，打字机永久停在被打断那句，
+  // 后续新台词全被当成'未播行'压在 hold 里 —— 表现就是字幕不再更新。
+  // segToken 驱动下，新段推进不再依赖"段变了+playing"的文本判断，锁只按时间过期。
+  if (__ttsInterruptLock && (Date.now() - (__ttsInterruptLockAt || 0) > 8000)) {
+    __ttsInterruptLock = false;
+  }
+  if (__ttsInterruptLock) return false;
+  // 【轮末终态】本轮已说完：只把【当前确实在播的那一行】补齐，绝不碰新行。
+  // 旧版无差别 shown=words.length，是"整段先出来"的第二个来源。
+  if (!speaking && !playing){
+    if (__typer.mode === 'tts' && __typer.idx >= 0 && !__typer.frozen
+        && __typer.idx < lines.length){
+      __typer.shown = __typer.words.length;
+      __typer.frozen = true;
+      __typer.pendingRender = false;
+      // 【2026-11-08 三修】闸门保持开启（不清 __ttsEverPlaying）：
+      // 轮末清掉会在"下一轮日志先落盘、语音还没开口"这个窗口重新
+      // 把新台词整段刷出来，正是用户反复报的现象。历史行由 frozen
+      // 自动整行显示，无需关闸门。
+      return __progressMoved();   // 轮末补齐也是有效推进
+    }
+    return false;   // 没有正在播的行 → 什么都不做（新行保持隐藏）
+  }
+  // 收集所有 neuro 行的下标 + 正文
+  var neuro = [];
+  for (var i = 0; i < lines.length; i++){
+    if (/^\[.*\] neuro:/.test(lines[i])){
+      neuro.push({ idx: i, body: lines[i].replace(/^\[.*\] neuro:\s*/, '') });
+    }
+  }
+  if (!neuro.length) return false;
+  var frac = Math.min(1, Math.max(0, Number(tts.frac) || 0));
+  var segToken = Number(tts.segToken || 0);
+  var target = null;
+  // 【2026-11-21 根修】我最新一句话的行号：它之前的 neuro 行属于已翻篇的上一轮，
+  // 新一段语音绝不能落回去（否则就是"她的话跑到我说的话前面"）。
+  var lastUserIdx = -1;
+  for (var _lu = lines.length - 1; _lu >= 0; _lu--){
+    if (/^\[.*\] user:/.test(lines[_lu])) { lastUserIdx = _lu; break; }
+  }
+
+  // ===========================================================================
+  // 【2026-11-21 根治：按粉色字幕机制重构 streaming】
+  // 粉色字幕：_segToken 逐段递增；frac = _curSegRevealed/_curSegTotal 直接驱动逐字
+  // 揭示；无文本匹配、无游标状态机。聊天房照搬：
+  //   ① segToken 变化 = 新段开始 → 上一段所在行补齐整行，游标【顺序推进】到
+  //      下一条未播 neuro 行。彻底删掉 seg 归一化模糊匹配 + 一长串 fallback ——
+  //      后端按句切分/清洗与前端 TTS 切句必然不一致，文本匹配几乎必失败，
+  //      旧代码 fallback 到"没有新行就 return false"→ 游标卡死、字幕永久停更。
+  //   ② 同一段后续帧保持当前游标；shown 由 frac 单调决定，进度快慢=揭示快慢。
+  //   ③ 没有 segToken（老 bridge / 1s 轮询快照）时回落旧文本匹配，保持向后兼容。
+  // ===========================================================================
+  if (segToken > 0){
+    if (segToken !== __lastSegToken){
+      __lastSegToken = segToken;
+      // 新段 = 上一段播完：先补齐上一行（防 frac 0.99→1.0 被源端节流吞掉后留半句），
+      // 再把游标推进到下一条 neuro 行。打断冻结的行不补齐 —— 保留"停在那一个词"。
+      if (__typer.idx >= 0 && __typer.mode === 'tts' && __typer.idx < lines.length
+          && !__typer.frozen){
+        __typer.shown = __typer.words.length;
+        __typer.frozen = true;
+      }
+      var base = (__typer.idx >= 0) ? __typer.idx : -1;
+      if (lastUserIdx > base) base = lastUserIdx;
+      for (var q = 0; q < neuro.length; q++){
+        if (neuro[q].idx > base){ target = neuro[q]; break; }
+      }
+    }
+    if (!target && __typer.idx >= lastUserIdx){
+      // 同段后续帧 / 新段但新行还没落盘 → 保持当前游标（绝不卡死、也不乱跳）
+      for (var z = 0; z < neuro.length; z++){
+        if (neuro[z].idx === __typer.idx){ target = neuro[z]; break; }
+      }
+    }
+  } else {
+    // ---- 兼容兜底：无 segToken 时沿用旧的 seg 文本模糊匹配 ----
+    var seg = String(tts.seg || '');
+    var ns = __normSpeech(seg);
+    if (ns.length >= 2){
+      for (var j = neuro.length - 1; j >= 0; j--){
+        if (neuro[j].idx < lastUserIdx) continue;   // 上一轮的行不参与匹配
+        var nb = __normSpeech(neuro[j].body);
+        if (nb && (nb.indexOf(ns) >= 0 || ns.indexOf(nb) >= 0)){ target = neuro[j]; break; }
+      }
+    }
+    if (!target){
+      var cur = __typer.idx;
+      if (cur >= 0 && cur >= lastUserIdx && !__typer.frozen && __typer.mode === 'tts'){
+        for (var k = 0; k < neuro.length; k++){
+          if (neuro[k].idx === cur){ target = neuro[k]; break; }
+        }
+      }
+    }
+    if (!target){
+      var base2 = (__typer.idx >= 0) ? __typer.idx : -1;
+      if (lastUserIdx > base2) base2 = lastUserIdx;
+      for (var q2 = 0; q2 < neuro.length; q2++){
+        if (neuro[q2].idx > base2){ target = neuro[q2]; break; }
+      }
+    }
+  }
+  // live = 粉色字幕此刻显示的完整累积文本（权威、零换算）。用它做归一化
+  // "累积前缀"定位，把游标拉回正确行；同时算出"当前行已揭示的归一化字符数"。
+  var live = String(tts.live || '');
+  var liveNorm = live ? __normSpeech(live) : '';
+  var liveInRow = -1;
+  if (!target && liveNorm){
+    var accN = '';
+    for (var _lv = 0; _lv < neuro.length; _lv++){
+      var _bn = __normSpeech(neuro[_lv].body);
+      if (!_bn) continue;
+      var _accNext = accN + _bn;
+      if (_accNext.indexOf(liveNorm) === 0 && liveNorm.length >= accN.length){
+        target = neuro[_lv];
+        liveInRow = Math.max(0, liveNorm.length - accN.length);
+        break;
+      }
+      accN = _accNext;
+    }
+  } else if (liveNorm && target){
+    var _preN = '';
+    for (var _pv = 0; _pv < neuro.length; _pv++){
+      if (neuro[_pv].idx >= target.idx) break;
+      var _pb = __normSpeech(neuro[_pv].body);
+      if (_pb) _preN += _pb;
+    }
+    var _tn = __normSpeech(target.body);
+    if (_tn && liveNorm.length >= _preN.length){
+      liveInRow = Math.max(0, Math.min(_tn.length, liveNorm.length - _preN.length));
+    }
+  }
+  if (!target) return false;
+
+  var words = __splitWords(target.body);
+  var shown;
+  if (!playing && frac < 0.02){
+    // 语音还没开口（后端日志已落盘、音频在合成/排队）→ 0 词，杜绝"提前渲染"
+    shown = 0;
+  } else if (liveInRow >= 0){
+    // live 优先：用"当前行已揭示的归一化字符数 / 该行归一化总长"作揭示比例，
+    // 精确、单调、零段间残留。
+    var _tn2 = __normSpeech(target.body);
+    var _tf = _tn2 && _tn2.length > 0 ? Math.min(1, liveInRow / _tn2.length) : frac;
+    shown = __shownByCharFrac(words, target.body, _tf);
+  } else {
+    // 播放中：按【字符进度】换算成词数，与粉色字幕同源
+    shown = __shownByCharFrac(words, target.body, frac);
+  }
+  // 单调保护：同一行的 shown 只增不减（帧抖动 / 段重置不会让字幕回跳）
+  var sameLine = (__typer.idx === target.idx && __typer.mode === 'tts');
+  if (sameLine && shown < __typer.shown) shown = __typer.shown;
+  var frozen = (shown >= words.length);
+  if (sameLine && __typer.shown === shown && __typer.frozen === frozen) return false;
+  __typer = { idx: target.idx, words: words, shown: shown, frozen: frozen,
+              lineSig: lines[target.idx], _startedAt: Date.now(), mode: 'tts', pendingRender: true };
+  return __progressMoved();
+}
+var __lastProgressTs = 0;
+// 【2026-11-21 二次修 —— 字幕永久 hold 的最后一环】"进度【真的推动了打字机】"
+// 的最后时刻。看门狗/游标逃生舱只认这个时间戳：进度帧来得再勤，只要 seg
+// 定位失败、shown/idx 都没动，就不算有效进度 —— 否则 __ttsLastAt 被无限刷新，
+// 未播行永远停在 hold（空占位），表现就是"进度桥活着、字幕却死了"。
+var __lastEffectiveProgressAt = 0;
+function __progressMoved(){ __lastEffectiveProgressAt = Date.now(); return true; }
+
+// 作用：算出当前这条 neuro 行"该显示多少词"的字符串。
+function __typingText(){
+  return __typer.words.slice(0, __typer.shown).join(' ') + (__typer.shown ? ' ' : '');
+}
+// 作用：把某一行的显示模式算出来。
+//   full   = 整行显示（已播完 / 非 neuro / 未启用同步）
+//   typing = 只显示已说到的词（正在播）
+//   hold   = 占位但【不渲染文字】（日志已落盘、语音还没播到）
+// 【2026-11-08 二修】这是"先输出整段话、再逐词蹦"的根治点：
+// 后端逐句落盘远早于 TTS 播放，旧版 paint 把所有非 typing 的 neuro 行
+// 一律整行显示 → 一次收到 N 句就 N-1 句秒出整段，随后 TTS 进度把游标
+// 拉回、又从 0 词开始逐词，视觉上就是"整段闪一下再重打一遍"。
+function __lineMode(l, i, gating, lastUser){
+  if (lineClass(l) !== 'neuro') return 'full';
+  if (!gating) {
+    // 无语音同步：只有 fixed 兜底打字机正在揭示的那一行保持逐词，
+    // 其余全部整行（纯文本对话 / TTS 桥不可用时字幕不能永远空着）。
+    if (i === __typer.idx && !__typer.frozen && __typer.mode === 'fixed')
+      return 'typing';
+    // 治"闪一下全蹦出来"：看门狗开闸时，曾被 TTS 驱动（mode==='tts'）的游标
+    // 之后尚未揭示的行【继续 hold】，等真实进度逐词推进，绝不一次性全显。
+    if (__typer.mode === 'tts' && __typer.idx >= 0 && i > __typer.idx)
+      return 'hold';
+    return 'full';
+  }
+  // 【2026-11-21 根修 · 她的台词跑到我说的话前面】
+  // 排在我最新一句话之前的 neuro 行，属于【已经翻篇的上一轮】：它要么播完了，
+  // 要么被打断/跳过。留着空占位有两个坏处 ——
+  //   ① 占位把我这句话顶在下面，看起来字幕空了；
+  //   ② 更要命：新一轮语音的 segToken 推进只找"下一条未播 neuro 行"，不看轮次，
+  //      于是把【新的话】灌进【上一轮那个空占位】—— 那行在我这句话上面，
+  //      表现就是"她的话出现在我说的话前面"。
+  // 直接整行显示，占位消失，新段也就只能落在 new user 行之后。
+  if (lastUser >= 0 && i < lastUser) return 'full';
+  if (__typer.idx < 0) return 'hold';        // 还没收到第一条播放进度 → 全部等
+  if (i < __typer.idx) return 'full';        // 这句之前已经播过 → 整行
+  if (i === __typer.idx) return __typer.frozen ? 'full' : 'typing';
+  return 'hold';                             // 还没播到 → 空占位
+}
+function paint(el, lines, key){
+  // 【2026-11-21 修 · 字幕停更】旧版 `if (__paused || hasSelection()) return;`
+  // —— 只要页面上留着一处文字选区（选中一句话去复制/翻译后没点掉），
+  // paint() 就整个不执行，新对话永远不出现，看起来就是"字幕突然不更新了"。
+  // 选区只该影响"别自动滚动/别推进打字机"，不该阻止渲染。
+  var _sel = hasSelection();
+  if (__paused) return;
+  var sig = lines.join('\n');
+  var contentChanged = (__lastContentSig[key] !== sig);
+  __lastContentSig[key] = sig;
+  // 滚动状态只从 scroll 事件读取，不在渲染时独立计算
+  var gating = (key === 'chat') && __ttsGating();
+  // 【2026-11-08 三修·看门狗】闸门开启期内若存在"未播到的行"，但它们长时间
+  // 拿不到任何新进度（TTS 合成失败 / 进度桥断开 / 这一轮没有语音），就放开闸门
+  // 让台词整行显示 —— 否则那些行会永远停在空占位，字幕一片空白。
+  if (gating) {
+    var _lastNeuro = -1;
+    for (var _li = lines.length - 1; _li >= 0; _li--) {
+      if (/^\[.*\] neuro:/.test(lines[_li])) { _lastNeuro = _li; break; }
+    }
+    var _hasUnplayed = (_lastNeuro >= 0) &&
+      ((__typer.idx < 0) || (_lastNeuro > __typer.idx));
+    if (__holdWatchdog(_hasUnplayed)) {
+      __ttsEverPlaying = false;    // 等到下一次真实进度会重新置 true
+      gating = false;
+    }
+  }
+
+  // 【2026-11-21 根修 · 字幕永久 hold】旧看门狗只看"有没有新进度"——只要
+  // TTS 进度帧还在来（哪怕 seg 匹配不上任何行、游标根本没动），__holdSince
+  // 就被无限重置，新台词永远停在空占位，字幕一片空白。这正是"进度桥活着、
+  // 字幕却死了"的完整根因：旧看门狗防不了"活跃但失效"。
+  // 现在加一道【游标生存期】硬逃生舱：只要存在未播行，且游标
+  // （__typer.idx）长时间没推进过（30s），无论进度帧来不来，都强制开闸——
+  // 把未播行整行放出来。下一次真实命中时 __applyTtsProgress 会自然接管。
+  if (gating && _hasUnplayed) {
+    var _now = Date.now();
+    // 【2026-11-21 二次修 —— 上一版逃生舱从没真正触发过】
+    // 旧版只有 `__typer.idx !== __holdCursorIdx` 时才初始化 __holdCursorAt；
+    // 而两者初值都是 -1，"从未命中过任何进度行"恰恰是最常见情形
+    // （后端按句落盘 / 前端 TTS 另一套切句 → seg 几乎必然失配）。
+    // 于是 __holdCursorAt 永远停在 0，30s 硬逃生舱形同虚设 → 未播行
+    // 永久 hold，字幕一片空白。这里改为：没起表就先起表，卡住才重起表。
+    if (!__holdCursorAt || __typer.idx !== __holdCursorIdx) {
+      __holdCursorIdx = __typer.idx;
+      __holdCursorAt = _now;
+    } else {
+      // 以"打字机真的动过"为准：正常播放时 __progressMoved() 每帧刷新，
+      // 长句逐词推进不会被误判；进度帧活跃却始终定位失败时计时一路走满，
+      // 强制开闸把台词整行放出来。下一次真实命中由 __applyTtsProgress 接管。
+      var _lastMove = Math.max(__holdCursorAt || 0, __lastEffectiveProgressAt || 0);
+      if ((_now - _lastMove) > __HOLD_MAX_MS) {
+        __holdCursorAt = 0;
+        __holdCursorIdx = -1;
+        __ttsEverPlaying = false;
+        __lastProgressTs = 0;      // 允许下一次旧进度帧重新生效
+        __lastEffectiveProgressAt = 0;
+        gating = false;
+      }
+    }
+  } else if (!gating) {
+    __holdCursorAt = 0;
+    __holdCursorIdx = -1;
+  }
+
+  // 【2026-11-08 二修】只有"没有任何语音同步"时才用 fixed 打字机兜底。
+  // 语音活跃期完全交给实时进度定位游标，不再让 __typerStart 抢着接管新行
+  // （旧版它会把 mode 重置成 fixed、shown 归 0，造成字幕回跳）。
+  if (key === 'chat' && contentChanged && !gating) {
+    var ttsActive = (__typer.mode === 'tts' && !__typer.frozen);
+    if (!ttsActive) {
+      var oldIdx = (__typer.idx >= 0) ? __typer.idx : -1;
+      __typerStart(lines, oldIdx + 1);
+    }
+  }
+
+  // 【结构签名】只包含"每行是什么模式 + 原文"，不含已揭示词数。
+  // 逐词推进时结构不变 → 只改一个 span 的 textContent，不再全量重建 DOM。
+  // 我最新一句话的行号：它之前的 neuro 行都属于已翻篇的上一轮。
+  var lastUserIdx = -1;
+  for (var _u = lines.length - 1; _u >= 0; _u--) {
+    if (/^\[.*\] user:/.test(lines[_u])) { lastUserIdx = _u; break; }
+  }
+  var modes = lines.map(function(l, i){ return __lineMode(l, i, gating, lastUserIdx); });
+  var structSig = lines.map(function(l, i){ return modes[i] + '|' + l; }).join('\n');
+
+  if (__sig[key] !== structSig) {
+    // == 增量 DOM 更新：消除 innerHTML 全量重建造成的闪烁 ==
+    // 缓存已有子节点（首次用空数组）
+    if (!el.__nodes) el.__nodes = [];
+    var oldNodes = el.__nodes;
+    var newNodes = [];
+    var maxLen = Math.max(oldNodes.length, lines.length);
+
+    for (var _i = 0; _i < maxLen; _i++) {
+      var cls = lineClass(lines[_i] || '');
+      var mode = modes[_i];
+      var html;
+      if (mode === 'hold') {
+        html = '<div class="msg neuro hold">&nbsp;</div>';
+      } else if (mode === 'typing') {
+        html = '<div class="msg neuro"><span class="typing" id="__typing-live">'
+          + esc(__typingText()) + '</span></div>';
+      } else {
+        html = '<div class="msg ' + cls + '">' + esc(lines[_i] || '') + '</div>';
+      }
+      if (_i < oldNodes.length) {
+        var old = oldNodes[_i];
+        // 快速判断：类名和文本内容相同则跳过
+        var oldText = old.textContent || '';
+        var oldCls = old.className || '';
+        var newCls = cls === '' ? 'msg' : 'msg ' + cls;
+        if (mode === 'hold') newCls = 'msg neuro hold';
+        else if (mode === 'typing') newCls = 'msg neuro';
+        var expectText = (mode === 'hold') ? '\u00a0' : esc(lines[_i] || '');
+        if (mode === 'typing') expectText = esc(__typingText());
+        if (oldCls === newCls && oldText === expectText) {
+          newNodes.push(old);
+          continue;
+        }
+        var newDiv = document.createElement('div');
+        newDiv.innerHTML = html;
+        var replacement = newDiv.firstChild;
+        el.replaceChild(replacement, old);
+        newNodes.push(replacement);
+      } else {
+        // 新行：追加
+        var tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        var node = tmp.firstChild;
+        el.appendChild(node);
+        newNodes.push(node);
+      }
+    }
+    // 多余旧节点删除
+    for (var _d = oldNodes.length - 1; _d >= lines.length; _d--) {
+      if (oldNodes[_d].parentNode) el.removeChild(oldNodes[_d]);
+    }
+    el.__nodes = newNodes;
+    __sig[key] = structSig;
+    // 智能滚动：只有"在底部且用户没在翻看往期"才跟随
+    if (__lastAtBottom && !__userScrolledUp && !_sel) el.scrollTop = el.scrollHeight;
+  } else {
+    // 结构没变：只更新正在逐词揭示的那一个节点（约 120ms 一次，开销极小）
+    var typingIdx = modes.indexOf('typing');
+    var node = (typingIdx >= 0 && typeof document.getElementById === 'function')
+      ? document.getElementById('__typing-live') : null;
+    if (typingIdx >= 0 && !node) {
+      // 外部重建过 DOM（节点被移除）→ 强制下一轮走全量重建
+      __sig[key] = '';
+    } else if (node) {
+      var t = __typingText();
+      if (node.textContent !== t) node.textContent = t;
+    }
+  }
+
+  // fixed 兜底（纯文本 / TTS 桥不可用）：每 tick 推进几个词，随后只改 span。
+  // 有选区时不推进：用户正在选字，别让文字在手指底下变化。
+  if (!gating && !_sel && key === 'chat' && !__typer.frozen && modes.indexOf('typing') >= 0) {
+    var step = Math.max(1, Math.round(__typer.words.length / 14));
+    __typer.shown = Math.min(__typer.words.length, __typer.shown + step);
+    if (__typer.shown >= __typer.words.length) __typer.frozen = true;
+    var live = (typeof document.getElementById === 'function')
+      ? document.getElementById('__typing-live') : null;
+    if (live) live.textContent = __typingText();
+    if (!__typer.frozen) el._typingTick = true;
+    // 【2026-11-08 逐词跟随】正在逐词揭示时内容逐词变长：若用户在底部
+    // 且没在翻看往期，scrollTop 跟着走，保证新词始终可见。
+    if (key === 'chat' && __lastAtBottom && !__userScrolledUp) {
+      el.scrollTop = el.scrollHeight;
+    }
+  }
+  __typer.pendingRender = false;
+}
+var __lastContentSig = {};
+window.__render = function(p){
+  // 【2026-11-07 逐词打字机·打断停驻】主进程在 payload 里带最近打断时间戳。
+  // 打断发生在打字机揭示中途 → 立刻冻结在当前位置（用户要求"打断时停在那词"）。
+  if (p && p.interruptAt && !__typer.frozen && __typer.idx >= 0) {
+    var started = __typer._startedAt || 0;
+    if (p.interruptAt >= started) {
+      __typer.frozen = true;
+      __typer.pendingRender = false;
+      // 【2026-11-08 打断锁】TTS 随即 stop，若不锁住，后续进度推送会把
+      // 台词补齐成整句 —— 用户要的是"停在被打断的那个词"。
+      // 【2026-11-21】记下加锁时刻：锁必须会过期，不能永久冻住字幕。
+      __ttsInterruptLock = true;
+      __ttsInterruptLockAt = Date.now();
+    }
+  }
+  var lines = p.chat || [];
+  // 【2026-11-08 二修】实时进度由 preload 桥每 120ms 推送（见下方 onProgress）。
+  // 主进程注入的 p.tts 只是【页面刚加载 / 实时桥还没就绪】时的兜底，
+  // 不能每 1 秒无条件覆盖实时进度：否则轮询用旧快照把游标拉回，
+  // 字幕会周期性回跳、看起来就是"卡顿 + 重新打一遍"。
+  if (p && p.tts){
+    // 【2026-11-07 v5 闸门兜底】实时 tts:progress 桥若因窗口重建/加载时序错过，
+    // __ttsEverPlaying 会一直 false，未播台词就被整段刷出来（用户报"后面已经有
+    // 句子了，是他同时发出但还没说的"）。1s 轮询里也有新鲜进度，用它开闸门。
+    if ((p.tts.playing || p.tts.speaking) && !__ttsEverPlaying) __ttsEverPlaying = true;
+    if (!__ttsLive()) __applyTtsProgress(p.tts, lines);
+  }
+  // 【2026-11-15 翻译覆盖层】主进程每 1 秒用后端原始 chat_log 覆盖 lines，
+  // 会把刚翻译的译文冲回原文（用户报"翻译一下又变回来"）。这里在覆盖后
+  // 重新套用 __xlateOverlay 里的译文替换，让译文持久保留。
+  window.__rawChat = lines;   // 缓存未经翻译的原文（供「原文」按钮立即恢复）
+  if (typeof window.__applyXlate === 'function') lines = window.__applyXlate(lines);
+  window.__lastChat = lines;
+  paint(document.getElementById('chat'), lines, 'chat');
+  // 【2026-11-08 退出显性输出】CLOSE NEURO 的分阶段播报覆盖对话区。
+  // 用独立签名，不参与打字机；窗口保留到整个桌宠退出，用户能看着流程走完。
+  //
+  // 【2026-11-08 修 —— "聊天房里看不到我们的对话"】
+  // 覆盖层 .exitbody 是 position:absolute + inset:30px 0 0 0 + z-index:5，
+  // 一旦 display:block 就会盖住整片 #chat。旧逻辑"exitLines 非空即显示"，
+  // 而主进程启动时会把【上次退出报告】一并推进 _exitLines 供 SYSTEM LOG 回显
+  // → 覆盖层从启动第一秒就打开 → 对话区被完全遮住（对话其实一直在正常渲染）。
+  // 这里再加一道闸：只有【本次会话的退出流程真正开始】的播报才触发覆盖层，
+  // "上次退出时的记录"这类回显既不显示、也不当作退出流程的标志。
+  var ex = document.getElementById('exitlog');
+  var exLines = (p.exitLines || []).filter(function(l){
+    return String(l).indexOf('上次退出时的记录') < 0;
+  });
+  if (ex) {
+    if (exLines.length) {
+      var exSig = exLines.join('\n');
+      if (window.__exitSig !== exSig) {
+        window.__exitSig = exSig;
+        ex.innerHTML = exLines.map(function(l){ return '<div>'+esc(l)+'</div>'; }).join('');
+        ex.style.display = 'block';
+        ex.scrollTop = ex.scrollHeight;
+      }
+    } else {
+      window.__exitSig = '';
+      ex.style.display = 'none';
+    }
+  }
+  var b = document.getElementById('d1'), v = document.getElementById('d2');
+  b.className = 'dot ' + (p.backend ? 'on' : 'off');
+  v.className = 'dot ' + (p.vision ? 'on' : 'off');
+  document.getElementById('s1').textContent = p.backend ? '6006 online' : 'offline';
+  document.getElementById('s2').textContent = p.vision ? (p.visionModel || 'watching') : 'idle';
+  document.getElementById('s3').textContent = (p.frames == null ? '--' : p.frames)
+      + ' / obs ' + (p.observations == null ? '--' : p.observations);
+};
+// 按钮：PERSONA SET（拟人程度）+ CLOSE。document.title 当信令通道（零依赖）。
+// 【2026-11-07 修】title 后缀带时间戳：连续发同一条信令（如再次 CLOSE）时
+// title 若不变，page-title-updated 事件不会触发 → 主进程收不到 → 关不掉桌宠。
+function __send(user, arg){ document.title = '__NEURO_ROOM__:' + user + ':' + arg + ':' + Date.now(); }
+
+// 【2026-11-14 翻译按钮】剪贴板兜底：Electron 部分场景 navigator.clipboard 受限，
+// 用临时 textarea + execCommand('copy') 兜底，保证复制一定成功。
+function __fallbackCopy(text){
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed'; ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  } catch (e) { /* 复制失败不阻塞 */ }
+}
+// 主进程回显当前拟人程度（did-finish-load 后注入）
+window.__setPersonaValue = function(v){
+  var input = document.getElementById('persona');
+  if (input) input.value = (v == null ? '' : Number(v).toFixed(2));
+};
+
+// =====================================================================
+// 【2026-11-07 六板块】终端：与后台窗口同一套逻辑（console.html 移植）
+//   preload（console-preload.js）暴露 window.__neuroTerm：
+//   start / write / kill / isRunning / onData / onExit。
+//   同一个 PowerShell 由主进程持有，输出广播给后台 + 聊天房两个窗口。
+// =====================================================================
+var ANSI_COLORS = {
+  30:'#5a6a8a',31:'#c08080',32:'#4a9060',33:'#5f5036',34:'#6e8fbf',
+  35:'#9a7a9a',36:'#4e8f8f',37:'#9aa8c8',
+  90:'#6f8282',91:'#d09090',92:'#5aa878',93:'#7a6a48',94:'#7a9ac0',
+  95:'#ab8aab',96:'#5ca6a6',97:'#a8b8d8'
+};
+var termOut = null, termLine = null;
+var _ansiBuf = '';
+var TERM_MAX_NODES = 4000;
+function termReady(){ return !!(window.__neuroTerm); }
+function termSetState(running){
+  var d = document.getElementById('d3'), v = document.getElementById('s4');
+  if (d) d.className = 'dot ' + (running ? 'on' : 'off');
+  if (v) v.textContent = running ? 'powershell' : 'idle';
+}
+function termAppend(text){
+  if (!text) return;
+  text = _ansiBuf + String(text); _ansiBuf = '';
+  // 尾部可能是跨块的残片 ANSI 序列，保留到下一块再拼
+  var idx = text.lastIndexOf('\x1b');
+  if (idx >= 0){
+    var rest = text.slice(idx);
+    if (!/^\x1b\[[0-9;]*[a-zA-Z]$/.test(rest)){
+      _ansiBuf = rest;
+      text = text.slice(0, idx);
+    }
+  }
+  if (!text) return;
+  if (/\x1b\[[0-9;]*[23J]/.test(text)) termOut.innerHTML = '';  // cls/clear 清屏
+  termOut.insertAdjacentHTML('beforeend', ansiToHtml(text));
+  while (termOut.childNodes.length > TERM_MAX_NODES){           // 防内存膨胀
+    termOut.removeChild(termOut.firstChild);
+  }
+  termOut.scrollTop = termOut.scrollHeight;
+}
+function ansiToHtml(t){
+  var parts = t.split(/\x1b\[([0-9;]*)m/);   // 文本, 码, 文本, 码, ...
+  var html = '', fg = null, bold = false, close = [];
+  for (var i = 0; i < parts.length; i++){
+    if (i % 2 === 0){ html += esc(parts[i]); continue; }
+    var codes = parts[i].split(';');
+    for (var j = 0; j < codes.length; j++){
+      var c = parseInt(codes[j], 10);
+      if (c === 0){ fg = null; bold = false; }
+      else if (c === 1){ bold = true; }
+      else if (c === 39){ fg = null; }
+      else if (c >= 30 && c <= 37 || c >= 90 && c <= 97){ fg = c; }
+    }
+    html += '<span style="color:' + (fg != null ? ANSI_COLORS[fg] : 'inherit')
+        + (bold ? ';font-weight:700' : '') + '">';
+    close.push('</span>');
+  }
+  while (close.length) html += close.pop();
+  return html;
+}
+function termEcho(user){   // 本地回显命令（textContent 自动转义，不走 ANSI 通道）
+  var d = document.createElement('span');
+  d.className = 't-user';
+  d.textContent = (__termMode === 'cpp' ? 'CPP> ' : 'PS> ') + user;
+  termOut.appendChild(d);
+  termOut.appendChild(document.createTextNode('\r\n'));
+  termOut.scrollTop = termOut.scrollHeight;
+}
+// 【2026-11-07 C++ 编译模式】当前终端模式：'ps'（PowerShell）或 'cpp'（编译运行）
+var __termMode = 'ps';
+// CPP 模式的多行源码缓冲：单行直接提交；以 #if/#include 等开头的累积多行，空行或 EOF 提交
+var __cppBuf = '';
+// 【作用】把一条终端命令交给共享 PowerShell；不负责回显（由调用方 termEcho 做）。
+function __psWrite(user){
+  var t = window.__neuroTerm;
+  if (!t){ termAppend('[neuro] 终端桥未加载。\r\n'); return; }
+  t.isRunning().then(function(run){
+    if (run){
+      t.write(user + '\r\n');
+      if (/^(exit|quit)\s*$/i.test(user)) termSetState(false);
+    } else {
+      termAppend('[neuro] 启动 PowerShell...\r\n');
+      t.start().then(function(ok){
+        termSetState(!!ok);
+        setTimeout(function(){ t.write(user + '\r\n'); }, 600);
+      });
+    }
+  });
+}
+// 【作用】C++ 模式底部输入栏（2026-11-07 v5：之前被 disabled，用户报"没法输入"）。
+//   · 有正在运行的 C++ 程序（cin/scanf）→ 写进它的 stdin；
+//   · 没有程序在跑 → 当终端命令走 PowerShell（可手动执行 exe / dir / g++ 等）。
+//   C++ 源码仍然只在上方面板写，底部栏不再累积源码（避免和注入的代码串味）。
+function cppTermInput(user){
+  var bridge = window.__neuroCpp;
+  if (!bridge || typeof bridge.stdin !== 'function'){ __psWrite(user); return; }
+  try {
+    bridge.stdin(user).then(function(used){
+      if (!used) __psWrite(user);
+    }).catch(function(){ __psWrite(user); });
+  } catch (e) { __psWrite(user); }
+}
+function termSubmit(){
+  var user = termLine.value.replace(/\s+$/,'');
+  if (!user) return;
+  termLine.value = '';
+  termEcho(user);
+  if (__termMode === 'cpp'){ cppTermInput(user); return; }
+  __psWrite(user);
+}
+// =====================================================================
+// 【2026-11-07 C++ 编译模式】
+//   输入行 → 走 __neuroCpp.compile()：主进程 g++ 编译并运行，输出回终端。
+//   单行源码（"Hello" 等）直接编译；多行源码（函数/类）以 # 开头行开始累积，
+//   在空行回车时提交编译（避免每条语句都编译一次）。
+// =====================================================================
+function cppSubmit(user){
+  // 累积模式：以 #include/#define/#pragma 等开头的行进入多行缓冲
+  if (__cppBuf){
+    if (user === ''){                 // 空行 = 提交缓冲
+      var code = __cppBuf;
+      __cppBuf = '';
+      termEcho('// CPP 源码 ↓\r\n' + code);
+      termAppend('\r\n[neuro] 提交编译 (' + code.split('\n').length + ' 行)\r\n');
+      if (window.__neuroCpp) window.__neuroCpp.compile(code);
+      else termAppend('[neuro] C++ 桥未加载（preload 缺失）。\r\n');
+      return;
+    }
+    __cppBuf += '\n' + user;          // 继续累积
+    termAppend('  · 已加入 ' + cmd.length + ' 字（空行回车 = 编译）\r\n');
+    return;
+  }
+  if (/^\s*#(include|define|pragma|if|ifdef)/.test(user)){
+    __cppBuf = user;                  // 开始多行源码
+    termAppend('\r\n[neuro] C++ 多行模式：继续输入，空行回车编译。\r\n');
+    return;
+  }
+  // 单行 C++（如 "std::cout<<1;"）直接编译
+  termEcho('// CPP: ' + user);
+  termAppend('\r\n[neuro] 编译运行单行 C++...\r\n');
+  if (window.__neuroCpp) window.__neuroCpp.compile(user);
+  else termAppend('[neuro] C++ 桥未加载（preload 缺失）。\r\n');
+}
+// 【2026-11-08 面板化】上方面板源码 → 直接编译（Ctrl+Enter / ▶ RUN / ⚙ DEBUG）
+function cppEditorSubmit(mode){
+  var ed = document.getElementById('cppeditor');
+  if (!ed) return;
+  var code = ed.value.replace(/\s+$/, '');
+  if (!code){ termAppend('[neuro] 面板是空的。\r\n'); return; }
+  mode = (mode === 'debug') ? 'debug' : 'run';
+  termEcho('// CPP 源码 ↓' + (mode === 'debug' ? '（DEBUG -g -O0）' : '') + '\r\n' + code);
+  termAppend('\r\n[neuro] 提交编译 (' + code.split('\n').length + ' 行, ' + mode + ')...\r\n');
+  if (window.__neuroCpp) window.__neuroCpp.compile(code, mode);
+  else termAppend('[neuro] C++ 桥未加载（preload 缺失）。\r\n');
+}
+function __bindMode(){
+  var psBtn = document.getElementById('mode-ps');
+  var cppBtn = document.getElementById('mode-cpp');
+  var hint = document.getElementById('modehint');
+  var ps = document.getElementById('termps');
+  var line = document.getElementById('termline');
+  var editor = document.getElementById('cppeditor');
+  var runbar = document.getElementById('runbar');
+  var dragbar = document.getElementById('dragbar');
+  var setMode = function(m){
+    __termMode = m;
+    psBtn.className = 'modebtn' + (m === 'ps' ? ' on' : '');
+    cppBtn.className = 'modebtn' + (m === 'cpp' ? ' on' : '');
+    hint.textContent = m === 'ps' ? 'PowerShell' : 'C++ 编译';
+    ps.textContent = m === 'ps' ? 'PS>' : 'CPP>';
+    // 【2026-11-08 面板化】用户要求：C++ 代码在上方面板输入，不在底部操作栏。
+    // CPP 模式：源码编辑器显示在 termout 上方，底部输入栏隐藏停用；
+    // PS 模式：编辑器隐藏，底部输入栏恢复。
+    if (editor) editor.className = m === 'cpp' ? 'on' : '';
+    // 【2026-11-07 v5】CPP 模式也保留提示符（CPP>），底部输入栏必须可用。
+    if (ps) ps.style.display = '';
+    // 【2026-11-08 运行/调试按钮组】CPP 模式显示 ▶ RUN + ⚙ DEBUG，PS 模式隐藏
+    if (runbar) runbar.className = 'runbar' + (m === 'cpp' ? ' on' : '');
+    if (dragbar) dragbar.className = 'dragbar' + (m === 'cpp' ? ' on' : '');
+    if (line){
+      // 【2026-11-07 v5 修】原来 CPP 模式 line.disabled=true，导致"C++ 板块
+      // 的终端没办法输入"。现在两种模式都可用：CPP 模式输入优先喂程序 stdin，
+      // 没有程序在跑就当终端命令执行。源码依旧只在上方面板写。
+      line.disabled = false;
+      line.placeholder = m === 'ps'
+        ? '输入命令，回车执行（exit 退出）'
+        : '终端命令 / 程序运行中输入(stdin)，回车发送';
+      if (m === 'cpp'){ if (editor) editor.focus(); }
+      else { line.focus(); }
+    }
+    if (m === 'cpp'){ __cppBuf = ''; termAppend('\r\n[neuro] C++ 编译模式：上方面板写源码，▶ RUN 编译运行；底部可输命令或喂程序 stdin。\r\n'); }
+  };
+  // 【2026-11-08 自主写 C++】把模式切换暴露给 room:user：桌宠写代码/检查/编译
+  // 时可以自动切到 C++ 面板，不用用户先手点一下 C++ 按钮。
+  window.__setTermMode = setMode;
+  psBtn.onclick = function(){ setMode('ps'); };
+  cppBtn.onclick = function(){ setMode('cpp'); };
+  // 探测 g++ 可用性（纯展示，不可用也能输入）
+  if (window.__neuroCpp){
+    window.__neuroCpp.probe().then(function(v){
+      if (v) termAppend('[neuro] g++ 已就绪: ' + String(v).slice(0, 40) + '\r\n');
+      else termAppend('[neuro] 未找到 g++ —— C++ 模式不可用（需安装 MinGW 并加入 PATH）\r\n');
+    });
+  }
+}
+// =====================================================================
+// 【2026-11-07 文件管理】VSCode 式文件树：当前目录 + 子项列表
+//   __neuroFs.list/mkdir/delete/open/root（preload 暴露）
+// =====================================================================
+var __fsPath = '';                       // 当前展示目录
+function fsIcon(name, isDir){
+  if (isDir) return '<span class="fs-ic">▸</span>';
+  var ext = (name.split('.').pop() || '').toLowerCase();
+  if (/^(cpp|cc|cxx|h|hpp)$/.test(ext)) return '<span class="fs-ic" style="color:#6e8fbf">C</span>';
+  if (/^(js|ts|json)$/.test(ext)) return '<span class="fs-ic" style="color:#5aa878">J</span>';
+  if (/^(py)$/.test(ext)) return '<span class="fs-ic" style="color:#c0a060">P</span>';
+  if (/^(png|jpg|jpeg|gif|webp|bmp)$/.test(ext)) return '<span class="fs-ic" style="color:#9a7a9a">▦</span>';
+  return '<span class="fs-ic">·</span>';
+}
+function fsRender(res){
+  var pathEl = document.getElementById('fspath');
+  var body = document.getElementById('fsbody');
+  if (!res || !res.ok){ pathEl.textContent = (res && res.error) || '--'; body.innerHTML = ''; return; }
+  __fsPath = res.path;
+  pathEl.textContent = res.path;
+  var html = '';
+  for (var i = 0; i < res.dirs.length; i++){
+    var d = res.dirs[i];
+    html += '<div class="fsrow dir" data-dir="' + esc(d) + '">'
+      + '<span class="fs-ic">▸</span>'
+      + '<span class="fs-name" title="' + esc(d) + '">' + esc(d) + '</span>'
+      + '<span class="fs-del" data-del="' + esc(d) + '">✕</span></div>';
+  }
+  for (var j = 0; j < res.files.length; j++){
+    var f = res.files[j];
+    html += '<div class="fsrow" data-file="' + esc(f) + '">'
+      + fsIcon(f, false)
+      + '<span class="fs-name" title="' + esc(f) + '">' + esc(f) + '</span>'
+      + '<span class="fs-del" data-del="' + esc(f) + '">✕</span></div>';
+  }
+  if (!res.dirs.length && !res.files.length) html += '<div class="fsrow" style="color:#3a4a4a">（空目录）</div>';
+  body.innerHTML = html;
+  // 绑定点击：目录单击进入、文件单击系统打开、✕ 删除
+  var rows = body.querySelectorAll('.fsrow.dir');
+  for (var k = 0; k < rows.length; k++){
+    (function(row, name){
+      row.addEventListener('click', function(){
+        window.__neuroFs.list(__fsPath + '\\' + name).then(fsRender);
+      });
+    })(rows[k], rows[k].getAttribute('data-dir'));
+  }
+  var frows = body.querySelectorAll('.fsrow[data-file]');
+  for (var m = 0; m < frows.length; m++){
+    (function(row, name){
+      row.addEventListener('click', function(){
+        fsPreview(__fsPath, name);
+      });
+    })(frows[m], frows[m].getAttribute('data-file'));
+  }
+  var dels = body.querySelectorAll('.fs-del');
+  for (var n = 0; n < dels.length; n++){
+    (function(el, name){
+      el.addEventListener('click', function(ev){
+        ev.stopPropagation();
+        if (!confirm('删除 "' + name + '"（进回收站，可恢复）？')) return;
+        window.__neuroFs.delete(__fsPath, name).then(function(r){
+          if (r && !r.ok) alert(r.error || '删除失败');
+          fsRefresh();
+        });
+      });
+    })(dels[n], dels[n].getAttribute('data-del'));
+  }
+}
+// 【2026-11-14 内部文件预览】点文本文件在聊天房内查看内容，不弹系统程序。
+// 文本扩展名 → 读内容显示在预览面板；其他 → 提示不支持内部预览（不弹系统窗口）。
+function fsPreview(dir, name){
+  if (!window.__neuroFs) return;
+  var panel = document.getElementById('fspreview');
+  var pathEl = document.getElementById('fspreview-path');
+  var bodyEl = document.getElementById('fspreview-body');
+  window.__neuroFs.read(dir, name).then(function(r){
+    panel.classList.add('show');
+    pathEl.textContent = name;
+    if (r && r.ok){
+      bodyEl.classList.remove('err');
+      var text = String(r.text || '');
+      // 超长截断提示（前端兜底，后端已限 512KB）
+      if (text.length > 200000){ text = text.slice(0, 200000) + '\n…（内容过长，已截断）'; }
+      bodyEl.textContent = text;
+    } else {
+      bodyEl.classList.add('err');
+      bodyEl.textContent = (r && r.error) || '读取失败';
+    }
+  });
+}
+function fsPreviewClose(){
+  var panel = document.getElementById('fspreview');
+  if (panel) panel.classList.remove('show');
+}
+function fsRefresh(){
+  if (!window.__neuroFs) return;
+  window.__neuroFs.list(__fsPath).then(fsRender);
+}
+function __bindFs(){
+  if (!window.__neuroFs){ return; }
+  var pathEl = document.getElementById('fspath');
+  var body = document.getElementById('fsbody');
+  // 【2026-11-14 盘符浏览】ROOT 按钮：列出系统盘符，点盘进入根目录，像资源管理器一样逐层浏览。
+  // 不再用手写路径，也不再弹系统文件夹对话框（那个原生框样式丑）。
+  document.getElementById('fsroot').onclick = function(){
+    if (!window.__neuroFs.drives) return;
+    window.__neuroFs.drives().then(function(r){
+      if (!r || !r.ok || !r.drives || !r.drives.length){ pathEl.textContent = '（无可用磁盘）'; return; }
+      // 在文件树区域列出盘符
+      var html = '<div class="fsrow" style="color:#5a8a8a">—— 磁盘 ——</div>';
+      for (var i = 0; i < r.drives.length; i++){
+        var d = r.drives[i];
+        html += '<div class="fsrow dir" data-drive="' + esc(d) + '">'
+          + '<span class="fs-ic" style="color:#6e9fbf">▣</span>'
+          + '<span class="fs-name" style="color:#a0c0d0">' + esc(d) + '</span></div>';
+      }
+      body.innerHTML = html;
+      // 点盘 → 进入该盘根目录
+      var rows = body.querySelectorAll('.fsrow[data-drive]');
+      for (var k = 0; k < rows.length; k++){
+        (function(row, drive){
+          row.addEventListener('click', function(){
+            window.__neuroFs.list(drive).then(fsRender);
+          });
+        })(rows[k], rows[k].getAttribute('data-drive'));
+      }
+    });
+  };
+  document.getElementById('fsup').onclick = function(){
+    if (!__fsPath) return;
+    var idx = __fsPath.replace(/[\\/]+$/, '').lastIndexOf('\\');
+    var parent = idx > 0 ? __fsPath.slice(0, idx) : '';
+    if (!parent){ document.getElementById('fsroot').click(); return; }
+    __fsPath = parent;
+    fsRefresh();
+  };
+  document.getElementById('fsnew').onclick = function(){
+    if (!__fsPath) return;
+    var name = prompt('新建文件夹名称：');
+    if (!name) return;
+    window.__neuroFs.mkdir(__fsPath, name).then(function(r){
+      if (r && !r.ok) alert(r.error || '创建失败');
+      fsRefresh();
+    });
+  };
+  // 预览面板关闭按钮
+  document.getElementById('fspreview-close').onclick = fsPreviewClose;
+  // 默认根目录：记住上次用过的目录；第一次打开用桌面（可点 ROOT 换）。
+  var __fsDefault = '';
+  try { __fsDefault = localStorage.getItem('neuro.fs.last') || ''; } catch (e) {}
+  window.__neuroFs.list(__fsDefault).then(function(r){
+    if (r && r.path) { try { localStorage.setItem('neuro.fs.last', r.path); } catch (e) {} }
+    fsRender(r);
+  });
+}
+// 【2026-11-08 可拖动分隔条】拖动 #dragbar 调整 C++ 编辑区高度。
+// 向上拖 = 编辑区变矮（盖住代码）；向下拖 = 编辑区变高、直到底部。
+// 拖完后把编辑区设成固定高度（flex:none），输出区自动占剩余空间。
+function __bindDragbar(){
+  var bar = document.getElementById('dragbar');
+  var ed = document.getElementById('cppeditor');
+  if (!bar || !ed) return;
+  var dragging = false, startY = 0, startH = 0;
+  bar.addEventListener('mousedown', function(ev){
+    dragging = true;
+    startY = ev.clientY;
+    startH = ed.getBoundingClientRect().height;
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'ns-resize';
+    ev.preventDefault();
+  });
+  window.addEventListener('mousemove', function(ev){
+    if (!dragging) return;
+    var box = ed.parentElement.getBoundingClientRect();   // .termbox 高度
+    var maxH = Math.max(60, box.height - 44);             // 给输出区留最小空间
+    var newH = Math.max(40, Math.min(startH + (ev.clientY - startY), maxH));
+    ed.style.flex = 'none';
+    ed.style.height = newH + 'px';
+  });
+  window.addEventListener('mouseup', function(){
+    if (!dragging) return;
+    dragging = false;
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+  });
+}
+
+function __bindTerm(){
+  termOut = document.getElementById('termout');
+  termLine = document.getElementById('termline');
+  termLine.addEventListener('keydown', function(ev){
+    if (ev.key === 'Enter'){ ev.preventDefault(); termSubmit(); }
+  });
+  // 【2026-11-08 面板化】C++ 源码编辑器：Ctrl+Enter 编译运行面板里的全部代码
+  var cppEditor = document.getElementById('cppeditor');
+  if (cppEditor){
+    cppEditor.addEventListener('keydown', function(ev){
+      if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)){
+        ev.preventDefault();
+        cppEditorSubmit();
+      }
+    });
+  }
+  // 【2026-11-08 运行/调试按钮】▶ RUN / ⚙ DEBUG 都走 cppEditorSubmit：
+  // RUN = 正常 -O2 编译运行；DEBUG = -g -O0 带调试信息编译运行。
+  // 只在 C++ 模式显示（__bindMode 里控制显隐），结果输出到终端区并自动滚到底。
+  var runBtn = document.getElementById('cpprun');
+  if (runBtn) runBtn.onclick = function(){ if (__termMode === 'cpp') cppEditorSubmit('run'); };
+  var dbgBtn = document.getElementById('cppdbg');
+  if (dbgBtn) dbgBtn.onclick = function(){ if (__termMode === 'cpp') cppEditorSubmit('debug'); };
+  document.getElementById('termclear').onclick = function(){ termOut.innerHTML = ''; };
+  __bindDragbar();
+  if (!termReady()){ termAppend('[neuro] 终端桥未加载（preload 缺失）。\r\n'); return; }
+  window.__neuroTerm.onData(function(chunk){ termAppend(chunk); });
+  window.__neuroTerm.onExit(function(code){
+    termSetState(false);
+    termAppend('\r\n[neuro] 终端已退出 (' + code + ')，敲命令可自动重启。\r\n');
+  });
+  window.__neuroTerm.start().then(function(ok){
+    termSetState(!!ok);
+    if (ok) termAppend('[neuro] PowerShell 已就绪。\r\n');
+    termLine.disabled = false;
+    termLine.focus();
+  });
+}
+
+window.__bindControls = function(){
+  // 【PERSONA SET】写入拟人程度（0~1）→ 主进程写回 config.json 并立即生效
+  document.getElementById('persona-set').onclick = function(){
+    var raw = document.getElementById('persona').value.trim();
+    var v = Number(raw);
+    if (!Number.isFinite(v)) return;
+    var c = Math.min(1, Math.max(0, v));
+    document.getElementById('persona').value = c.toFixed(2);
+    __send('humanity', String(c));
+  };
+  document.getElementById('persona').addEventListener('keydown', function(e){
+    if (e.key === 'Enter') document.getElementById('persona-set').click();
+  });
+  // 【CLOSE NEURO】道别 → 总结记忆 → 退出桌宠（主进程 farewellAndQuit）
+  document.getElementById('close').onclick = function(){
+    this.textContent = 'GOODBYE...';
+    this.disabled = true;
+    __send('close', '1');
+  };
+  // 【BG PICK】选择本地图片作为聊天房背景（30% 不透明度，底色保留）
+  document.getElementById('bgpick').onclick = function(){
+    __send('bg', 'pick');
+  };
+  // 【BG NONE】恢复纯色背景
+  document.getElementById('bgclear').onclick = function(){
+    __send('bg', 'none');
+  };
+  // 【HIDE】2026-11-14 隐藏模式：只留左下对话框，背景图 100% 不透明。
+  // 纯前端切换，不进主进程。再点一次（或点按钮）恢复完整布局。
+  document.getElementById('hide').onclick = function(){
+    var on = document.body.classList.toggle('hidden-mode');
+    this.classList.toggle('on', on);
+    this.textContent = on ? 'SHOW' : 'HIDE';
+  };
+  // 【无边框标题栏】2026-11-14 frameless 窗口自绘标题栏的窗口控制按钮。
+  document.getElementById('winmin').onclick = function(){
+    if (window.__neuroWin) window.__neuroWin.minimize();
+  };
+  document.getElementById('winclose').onclick = function(){
+    if (window.__neuroWin) window.__neuroWin.close();
+  };
+  // 【标题栏 hover 显示】鼠标移到窗口顶部 32px 内就浮现标题栏；离开顶部且
+  // 不在标题栏上则隐藏。用 mousemove 而非透明热区，避免热区拦截下方按钮点击
+  // （这是"无边框后点不到按钮"的根因）。
+  var __titlebar = document.getElementById('titlebar');
+  (function(){
+    var visible = false;
+    function setVis(v){
+      if (v === visible) return;
+      visible = v;
+      __titlebar.style.opacity = v ? '1' : '0';
+      __titlebar.style.transform = v ? 'translateY(0)' : 'translateY(-100%)';
+      __titlebar.style.pointerEvents = v ? 'auto' : 'none';
+    }
+    document.addEventListener('mousemove', function(ev){
+      // 鼠标 Y < 34 显示标题栏；否则，若鼠标不在标题栏矩形内则隐藏
+      if (ev.clientY < 34){ setVis(true); return; }
+      var r = __titlebar.getBoundingClientRect();
+      var over = ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
+      setVis(over);
+    });
+  })();
+  // 【译】2026-11-15 单词级翻译 v4：鼠标圈选几个词（哪怕一个词），点「译」，
+  // 只翻译圈中的那几个词，译文【就地】替换字幕里对应的那几个词，句子其余不动。
+  // 译文用覆盖层 __xlateOverlay 持久化：主进程每秒轮询会用后端原文覆盖 lines，
+  // 覆盖后重新套用 overlay，译文不会"翻译一下又变回来"。
+  var __xlateOverlay = [];   // [{ src, dst }]，src=原文片段，dst=译文（挂 window 供 __render 用）
+  window.__xlateOverlay = __xlateOverlay;
+  var __xlateState = { idx: -1, src: '', dst: '', busy: false };
+  // 【2026-11-15 跨段翻译 / 2026-11-21 二次修】把选区覆盖的几行就地替换成译文。
+  // 实现已抽到上方 __xlatePure 纯函数模块（页面与单测共用同一份代码，杜绝
+  // "测试测的和线上跑的不是一份"）。历史修复意图全部保留：行数不变（中间行
+  // 清空）、首行保留前缀、多层方括号历史行可剥、单次命中多处只替换选区那段。
+  function __applyRangeXlate(lines, startIdx, endIdx, sel, translated){
+    return window.__xlatePure.applyRange(lines, startIdx, endIdx, sel, translated);
+  }
+  // 把 overlay 里的所有译文替换套用到一组 lines 上，返回新数组（挂 window 供 __render 用）
+  // 【2026-11-21 二次修】定位永远基于传入的【原文】；每条 overlay 走同一个
+  // locate + applyRange，多次翻译逐条叠加。找不到原文的条目直接跳过 ——
+  // 日志滚动 / 原文被冲掉 / 格式异常时字幕照常显示，绝不白屏。
+  function __applyXlate(lines){
+    var base = Array.isArray(lines) ? lines : [];
+    var out = base.slice();   // 浅拷贝，避免污染 __rawChat
+    var P = window.__xlatePure;
+    if (!P || !__xlateOverlay.length) return out;
+    for (var k = 0; k < __xlateOverlay.length; k++){
+      var o = __xlateOverlay[k];
+      if (!o || !o.src || !o.dst) continue;
+      var loc = P.locate(base, o.src);          // 永远在干净原文里定位
+      if (!loc) continue;                       // 原文被冲掉/日志滚动 → 跳过这一条
+      __applyRangeXlate(out, loc.startIdx, loc.endIdx, loc.sel, o.dst);
+    }
+    return out;
+  }
+  window.__applyXlate = __applyXlate;
+  // 【修】点击「译」按钮的 mousedown 会清空选区，导致 onclick 里读不到
+  // 用户选中的文字。这里在 mousedown 阶段把选区快照下来。
+  var __selSnapshot = '';
+  (function(){
+    var btn = document.getElementById('xlate');
+    if (btn){
+      btn.addEventListener('mousedown', function(){
+        try { __selSnapshot = (window.getSelection && window.getSelection().toString()) || ''; }
+        catch(e){ __selSnapshot = ''; }
+      });
+    }
+  })();
+  // 定位选中的文字：返回 { startIdx, endIdx, sel }；sel 是圈中的精确文本。
+  // 【2026-11-21 二次修 —— 跨行翻译失效的根因】
+  // ① 定位基准永远用【原文】__rawChat（__lastChat 已套过译文，翻译后原文找不到）。
+  // ② DOM 里每行 .msg 的可见文本就是原始行（含 "[时间] 说话人: " 前缀），
+  //    跨行 getSelection().toString() 是各行文本以空白相连 —— 里面【含】中间行
+  //    的前缀。旧版拿"剥掉前缀的 bare 文本"拼接去匹配，而选区里恰恰有前缀，
+  //    归一化后仍对不上 → 定位失败 → 跨行翻译整个失效。
+  // ③ 匹配/替换统一走 __xlatePure（页面与单测同一份代码），支持单行、跨 N 行、
+  //    多层方括号历史行（"[上次会话] [21:22:01] neuro: "）、以及前缀格式异常兜底。
+  function __xlateLocate(){
+    var lines = window.__rawChat || window.__lastChat || [];
+    var sel = __selSnapshot;
+    if (!sel || !sel.trim()){
+      try { sel = (window.getSelection && window.getSelection().toString()) || ''; } catch(e){ sel = ''; }
+    }
+    return window.__xlatePure.locate(lines, sel);
+  }
+  document.getElementById('xlate').onclick = function(){
+    var btn = this;
+    if (__xlateState.busy) return;
+    var lines = window.__lastChat || [];
+    // 定位选中的精确文本（单词级 / 跨段）
+    var loc = __xlateLocate();
+    if (!loc){ btn.textContent = '译'; return; }
+    var startIdx = loc.startIdx, endIdx = loc.endIdx, sel = loc.sel;
+    if (!sel) return;
+    __xlateState.busy = true;
+    __xlateState.idx = startIdx;
+    __xlateState.src = sel;
+    __selSnapshot = '';
+    btn.textContent = '…';
+
+    // 单次翻译请求 → Promise<译文字符串>（失败时 reject）
+    function xlateOne(text){
+      return fetch('http://127.0.0.1:6006/v1/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text })
+      }).then(function(r){ return r.json(); }).then(function(j){
+        if (j && j.ok && j.text) return String(j.text).replace(/\s+/g, ' ').trim();
+        throw new Error((j && j.error) || '翻译失败');
+      });
+    }
+    // 写覆盖层：同 idx+src 更新译文，否则追加。idx 让两条文字相同的对话不错位。
+    function upsert(idx, src, dst){
+      for (var k = 0; k < __xlateOverlay.length; k++){
+        var o = __xlateOverlay[k];
+        if (o.src === src && (o.idx === idx || o.idx == null)){
+          o.dst = dst; if (o.idx == null) o.idx = idx; return;
+        }
+      }
+      __xlateOverlay.push({ src: src, dst: dst, idx: idx });
+    }
+    function repaint(){
+      var base = (window.__rawChat || window.__lastChat || []).slice();
+      var ls = __applyXlate(base);
+      window.__lastChat = ls;
+      try { if (window.getSelection) window.getSelection().removeAllRanges(); } catch(e){}
+      paint(document.getElementById('chat'), ls, 'chat');
+    }
+    function showFail(msg){
+      __xlateState.idx = -1; __xlateState.src = '';
+      var tmp = document.getElementById('xlateresult');
+      if (tmp){ tmp.style.display = 'block';
+        tmp.innerHTML = '<span class="xlate-lbl">失败</span>' + esc(msg || '翻译失败'); }
+    }
+
+    // 【2026-11-21 三修 · 两条对话一起翻译】
+    // 跨行选区切成"每行一段"分别翻译，译文各自写回各自那一行；单行选区保持
+    // 原来的单词级就地替换（旧行为不变，check_chatroom_xlate.js 钉住这条）。
+    var targets = [];
+    if (endIdx > startIdx && window.__xlatePure && window.__xlatePure.splitTargets){
+      targets = window.__xlatePure.splitTargets(
+        window.__rawChat || window.__lastChat || [], startIdx, endIdx, sel);
+    }
+    if (targets.length > 1){
+      // 每条对话各翻各的；限并发 4（选很多行时不冲垮翻译端点）。
+      // 全部成功后一次性套用，任一失败则整批不落盘。
+      function mapLimit(items, limit, worker){
+        var results = new Array(items.length), next = 0;
+        function run(){
+          if (next >= items.length) return Promise.resolve();
+          var i = next++;
+          return worker(items[i], i).then(function(v){ results[i] = v; return run(); });
+        }
+        return Promise.all(Array.from({ length: Math.min(limit, items.length) }, run))
+          .then(function(){ return results; });
+      }
+      mapLimit(targets, 4, function(t){ return xlateOne(t.text); })
+        .then(function(dsts){
+          __xlateState.busy = false; btn.textContent = '译';
+          for (var k = 0; k < targets.length; k++) upsert(targets[k].idx, targets[k].text, dsts[k]);
+          repaint();
+        })
+        .catch(function(e){ __xlateState.busy = false; btn.textContent = '译'; showFail(e && e.message); });
+      return;
+    }
+
+    // 单行 / 切分失败回落：整段按原方式翻译并就地替换。
+    var text = sel;
+    xlateOne(text).then(function(translated){
+      __xlateState.busy = false;
+      btn.textContent = '译';
+      upsert(startIdx, sel, translated);
+      repaint();
+    }).catch(function(e){
+      __xlateState.busy = false;
+      btn.textContent = '译';
+      showFail(e && e.message);
+    });
+  };
+  // 【原文】清除所有翻译覆盖，立即恢复字幕原始内容
+  document.getElementById('xshow').onclick = function(){
+    __xlateOverlay = [];
+    // 【2026-11-21 二次修】window 上那份引用也换到新数组：旧版只重赋值闭包
+    // 变量，window.__xlateOverlay 仍指着装过译文的旧数组，外部读取会误判。
+    window.__xlateOverlay = __xlateOverlay;
+    // 立即恢复原文（用缓存的未经翻译的 lines），不等下一次轮询
+    var raw = window.__rawChat || window.__lastChat || [];
+    window.__lastChat = raw;
+    try { if (window.getSelection) window.getSelection().removeAllRanges(); } catch(e){}
+    paint(document.getElementById('chat'), raw, 'chat');
+    var tmp = document.getElementById('xlateresult');
+    if (tmp) tmp.style.display = 'none';
+  };
+  __bindTerm();
+  __bindMode();
+  __bindFs();
+};
+
+// 主进程注入背景图片路径（file:// 或空串=纯色）。页面只负责显示，不读文件系统。
+window.__setBg = function(fileUrlOrEmpty){
+  var el = document.getElementById('bgimg');
+  if (!el) return;
+  if (fileUrlOrEmpty){
+    el.style.backgroundImage = "url('" + fileUrlOrEmpty + "')";
+    el.style.display = 'block';
+  } else {
+    el.style.backgroundImage = 'none';
+    el.style.display = 'none';
+  }
+};
+
+// 【2026-11-08 TTS 实时同步】主进程把 TTS 播放进度实时推给本窗口（preload 桥），
+// 收到就更新打字机并立即重绘 —— 字幕以约 160ms 粒度跟随语音，不再靠 1 秒轮询。
+if (window.__neuroTts && window.__neuroTts.onProgress) {
+  window.__neuroTts.onProgress(function(p){
+    try {
+      // 【2026-11-21 二次修】进度定位必须用【原文】：__lastChat 已套过译文
+      // （译文替换 + 中间行清空），拿它做 seg 匹配会在翻译后彻底失配 →
+      // 游标卡死 → 未播行永久 hold、字幕不再更新。原文干净，定位最稳。
+      // 显示仍用 __lastChat（译文版），只把定位输入换成原文。
+      var matchLines = window.__rawChat || window.__lastChat || [];
+      var showLines = window.__lastChat || matchLines;
+      if (__applyTtsProgress(p, matchLines)) {
+        paint(document.getElementById('chat'), showLines, 'chat');
+      }
+    } catch (e) { /* 忽略 */ }
+  });
+}
+
+// =====================================================================
+// 【作用】2026-11-08 自主写 C++ —— 处理主进程下发的 room:user。
+//   核心保真点：代码原文【整体赋给 textarea.value】，不走键盘模拟、不拼
+//   HTML、不按行切分再重组。空格缩进、真实换行、{ }、<iostream>、引号、
+//   反斜杠、中文注释全部原样进入编辑器。
+//   __setTermMode 由 __bindMode() 在控件绑定时挂上；若窗口刚加载完还没绑定，
+//   最多重试 20 次 × 200ms，指令不会丢。
+// =====================================================================
+function __roomApply(user, retry){
+  if (!user || !cmd.op) return;
+  var ed = document.getElementById('cppeditor');
+  var setMode = window.__setTermMode;
+  if (typeof setMode !== 'function' || !ed){
+    if ((retry || 0) < 20) setTimeout(function(){ __roomApply(user, (retry || 0) + 1); }, 200);
+    return;
+  }
+  var op = String(cmd.op);
+  if (__termMode !== 'cpp') setMode('cpp');
+
+  if (op === 'cpp_set_code'){
+    var code = String(cmd.code || '');
+    ed.value = code;                    // ← 原文整体赋值，一个字符都不改
+    ed.scrollTop = 0; ed.scrollLeft = 0;
+    __cppBuf = '';                      // 丢掉旧的多行缓冲，避免和新代码串味
+    termAppend('\r\n[neuro] 已写入 C++ 编辑器：' + code.split('\n').length +
+               ' 行 / ' + code.length + ' 字符。点 ▶ RUN 运行。\r\n');
+    return;
+  }
+  if (op === 'cpp_run' || op === 'cpp_debug'){
+    cppEditorSubmit(op === 'cpp_debug' ? 'debug' : 'run');
+    return;
+  }
+  if (op === 'cpp_visual_inspect'){
+    ed.scrollTop = 0; ed.scrollLeft = 0;
+    ed.className = 'on cppflash';
+    setTimeout(function(){ ed.className = 'on'; }, 1600);
+    termAppend('\r\n[neuro] 视觉检查：C++ 面板已展开，窗口对视觉捕获可见 12 秒。\r\n');
+    return;
+  }
+  // cpp_get_code：后端读代码镜像即可，页面不做多余动作
+}
+if (window.__neuroRoom && window.__neuroRoom.onCmd) {
+  window.__neuroRoom.onCmd(function(user){
+    try { __roomApply(user, 0); } catch (e) { /* 忽略 */ }
+  });
+}
+
+// =====================================================================
+// 【2026-11-14 修 —— 滚动状态实时检测】
+// 旧版 __userScrolledUp / __lastAtBottom 只在 paint() 里【被动】算一次 atBottom，
+// 没有绑定 scroll 事件 → 用户往上翻时标志不更新、滚回底部也不解除，
+// 表现为"不会自动滚动 + 翻看历史时被拽下去"。
+//
+// 【2026-11-20 修 —— 滚动锁死 + 闪烁】
+// 旧版 __render 里 paint() 自己算 atBottom（与 scroll 事件两套判断），
+// 新台词来时若 scroll 事件还没执行但 paint 先跑了 → scrollHeight 变了
+// → __userScrolledUp 被 paint 里的"假不在底部"锁死 → 再也不自动滚。
+// 修法：paint() 不再自己算 atBottom，只读 scroll 事件维护的 __lastAtBottom。
+// 同时把 innerHTML 全量重建改成增量 DOM 节点操作，消除"闪一下"的闪烁。
+// =====================================================================
+(function(){
+  var chatEl = document.getElementById('chat');
+  if (!chatEl) return;
+  chatEl.addEventListener('scroll', function(){
+    var atBottom = chatEl.scrollTop + chatEl.clientHeight >= chatEl.scrollHeight - 24;
+    if (atBottom){
+      if (__userScrolledUp) __userScrolledUp = false;   // 滚回底部 → 恢复跟随
+      __lastAtBottom = true;
+    } else {
+      // 用户主动滚离底部 → 锁定翻看状态（只要之前到达过底部）
+      if (__lastAtBottom) __userScrolledUp = true;
+      __lastAtBottom = false;
+    }
+  }, { passive: true });
+})();
+</script>
+<script>
+/* ==== 2026-11-21 realtime 3D whole-brain spike view (hidden by default) ====
+   Points: 16,384 neurons sampled from 166,700 (real connectome positions).
+   Spikes: per-frame bitmap from /v1/brain/3d/spikes (2,048 bytes => 16,384 bits).
+   Rendering: WebGL POINTS, additive glow, decay trail. Zero work while closed. */
+(function () {
+  var panel = document.getElementById('brainviz');
+  var btn = document.getElementById('brainbtn');
+  var cv = document.getElementById('brain3d');
+  if (!panel || !btn || !cv) return;
+  var gl = cv.getContext('webgl', { antialias: true, alpha: true });
+  var API = location.origin || 'http://127.0.0.1:6006';
+
+  var N = 0, on = false, pollTimer = null, rafId = null;
+  var intensity = null, iBuf = null, needUpload = false;
+  var yaw = 0.6, pitch = 0.22, dist = 3.0;
+  var drag = null;
+
+  function setText(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
+
+  if (!gl) { setText('brainstate', 'webgl unavailable'); return; }
+
+  // ---------- matrix helpers ----------
+  function ident() { return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]); }
+  function mul(a, b) {
+    var o = new Float32Array(16);
+    for (var i = 0; i < 4; i++) for (var j = 0; j < 4; j++) {
+      var s = 0;
+      for (var k = 0; k < 4; k++) s += a[k * 4 + j] * b[i * 4 + k];
+      o[i * 4 + j] = s;
+    }
+    return o;
+  }
+  function perspective(fovy, aspect, near, far) {
+    var f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+    return new Float32Array([f/aspect,0,0,0, 0,f,0,0, 0,0,(far+near)*nf,-1, 0,0,2*far*near*nf,0]);
+  }
+  function rotY(a) { var c = Math.cos(a), s = Math.sin(a);
+    return new Float32Array([c,0,-s,0, 0,1,0,0, s,0,c,0, 0,0,0,1]); }
+  function rotX(a) { var c = Math.cos(a), s = Math.sin(a);
+    return new Float32Array([1,0,0,0, 0,c,s,0, 0,-s,c,0, 0,0,0,1]); }
+  function translate(z) { return new Float32Array([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,z,1]); }
+
+  // ---------- shaders ----------
+  var VS = [
+    'attribute vec3 aPos;', 'attribute float aSc;', 'attribute float aI;',
+    'uniform mat4 uMVP;', 'uniform float uScale;',
+    'varying float vI; varying vec3 vCol;',
+    'vec3 hue(float h){ h=fract(h); vec3 p=abs(fract(vec3(h)+vec3(1.0,0.666,0.333))-0.5)*2.0-1.0;',
+    '  return clamp(p,0.0,1.0); }',
+    'void main(){',
+    '  gl_Position = uMVP * vec4(aPos, 1.0);',
+    '  float d = length(aPos);',
+    '  gl_PointSize = uScale * (1.6 + 4.4 * aI) / (1.0 + 0.45 * d);',
+    '  vI = aI;',
+    '  vCol = hue(aSc * 0.137) * 0.50 + vec3(0.08, 0.13, 0.20);',
+    '}'].join('\n');
+  var FS = [
+    'precision mediump float;', 'varying float vI; varying vec3 vCol;',
+    'void main(){',
+    '  vec2 d = gl_PointCoord - vec2(0.5);',
+    '  float r = length(d);',
+    '  if (r > 0.5) discard;',
+    '  float core = smoothstep(0.5, 0.02, r);',
+    '  vec3 col = mix(vCol, vec3(0.70, 0.94, 1.0), vI);',
+    '  gl_FragColor = vec4(col * (0.30 + 1.30 * vI), core * (0.14 + 0.86 * vI));',
+    '}'].join('\n');
+
+  function sh(type, src) {
+    var s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      setText('brainstate', 'shader error'); return null;
+    }
+    return s;
+  }
+  var prog = gl.createProgram();
+  var vs = sh(gl.VERTEX_SHADER, VS), fs = sh(gl.FRAGMENT_SHADER, FS);
+  if (!vs || !fs) return;
+  gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { setText('brainstate', 'link error'); return; }
+  gl.useProgram(prog);
+
+  var aPos = gl.getAttribLocation(prog, 'aPos');
+  var aSc = gl.getAttribLocation(prog, 'aSc');
+  var aI = gl.getAttribLocation(prog, 'aI');
+  var uMVP = gl.getUniformLocation(prog, 'uMVP');
+  var uScale = gl.getUniformLocation(prog, 'uScale');
+
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+  gl.clearColor(0, 0, 0, 0);
+
+  var pBuf = gl.createBuffer(), sBuf = gl.createBuffer();
+  iBuf = gl.createBuffer();
+
+  function draw() {
+    var w = cv.width, h = cv.height;
+    gl.viewport(0, 0, w, h);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    if (!N) return;
+    var mvp = mul(perspective(0.8, w / h, 0.1, 100),
+                  mul(translate(-dist), mul(rotX(pitch), rotY(yaw))));
+    gl.uniformMatrix4fv(uMVP, false, mvp);
+    gl.uniform1f(uScale, 1.35 * (h / 320) * (3.0 / dist));
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, pBuf);
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, sBuf);
+    gl.enableVertexAttribArray(aSc);
+    gl.vertexAttribPointer(aSc, 1, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, iBuf);
+    if (needUpload) { gl.bufferSubData(gl.ARRAY_BUFFER, 0, intensity); needUpload = false; }
+    gl.enableVertexAttribArray(aI);
+    gl.vertexAttribPointer(aI, 1, gl.FLOAT, false, 0, 0);
+
+    gl.drawArrays(gl.POINTS, 0, N);
+  }
+
+  function loop() {
+    if (!on) return;
+    rafId = requestAnimationFrame(loop);
+    if (!drag) yaw += 0.0020;
+    draw();
+  }
+
+  function b64ToBytes(s) {
+    var bin = atob(s), out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  var lastFrame = 0;
+
+  function applySpikes(bits) {
+    for (var i = 0; i < N; i++) {
+      var onBit = (bits[i >> 3] >> (7 - (i & 7))) & 1;
+      intensity[i] = onBit ? 1.0 : intensity[i] * 0.90;
+    }
+    needUpload = true;
+  }
+
+  function poll() {
+    if (!on) return;
+    fetch(API + '/v1/brain/3d/spikes?since=' + lastFrame, { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j || j.ok === false) { setText('brainstate', 'bridge down'); return; }
+        setText('brainstate', j.speaking ? 'speaking' : 'live');
+        setText('bv-spont', ((j.spont || 0) * 100).toFixed(1) + '%');
+        setText('bv-kc', (j.kc || 0).toFixed(2));
+        setText('bv-mbon', ((j.mbon || 0) * 100).toFixed(1) + '%');
+        setText('bv-hz', (j.hz || 0).toFixed(0));
+        var fr = j.frames || [];
+        for (var k = 0; k < fr.length; k++) {
+          applySpikes(b64ToBytes(fr[k].d));
+          if (fr[k].f > lastFrame) lastFrame = fr[k].f;
+        }
+        if (fr.length) draw();
+      })
+      .catch(function () { setText('brainstate', 'bridge down'); })
+      .then(function () { pollTimer = setTimeout(poll, 120); });
+  }
+
+  function loadPoints() {
+    return fetch(API + '/v1/brain/3d/points', { cache: 'no-store' })
+      .then(function (r) { return r.arrayBuffer(); })
+      .then(function (buf) {
+        var dv = new DataView(buf);
+        var magic = String.fromCharCode(dv.getUint8(0), dv.getUint8(1), dv.getUint8(2), dv.getUint8(3));
+        if (magic !== 'NV3D') throw new Error('bad magic');
+        N = dv.getInt32(8, true);
+        var off = 36;
+        var pos = new Float32Array(buf, off, N * 3); off += N * 12;
+        var sc = new Uint8Array(buf, off, N);
+        var scF = new Float32Array(N);
+        for (var i = 0; i < N; i++) scF[i] = sc[i] / 27;
+        gl.bindBuffer(gl.ARRAY_BUFFER, pBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, pos, gl.STATIC_DRAW);
+        gl.bindBuffer(gl.ARRAY_BUFFER, sBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, scF, gl.STATIC_DRAW);
+        intensity = new Float32Array(N);
+        gl.bindBuffer(gl.ARRAY_BUFFER, iBuf);
+        gl.bufferData(gl.ARRAY_BUFFER, intensity, gl.DYNAMIC_DRAW);
+        setText('brainstate', 'loading spikes');
+      });
+  }
+
+  function start() {
+    if (on) return;
+    on = true;
+    panel.classList.add('on');
+    btn.classList.add('on');
+    if (!N) {
+      loadPoints().then(function () {
+        if (!on) return;
+        loop(); poll();
+      }).catch(function () { setText('brainstate', 'bridge down'); });
+    } else { loop(); poll(); }
+  }
+
+  function stop() {
+    on = false;
+    if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+    if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+    panel.classList.remove('on');
+    btn.classList.remove('on');
+  }
+
+  // ---------- camera controls ----------
+  cv.addEventListener('mousedown', function (e) { drag = { x: e.clientX, y: e.clientY }; });
+  window.addEventListener('mouseup', function () { drag = null; });
+  window.addEventListener('mousemove', function (e) {
+    if (!drag) return;
+    yaw += (e.clientX - drag.x) * 0.006;
+    pitch = Math.max(-1.2, Math.min(1.2, pitch + (e.clientY - drag.y) * 0.006));
+    drag = { x: e.clientX, y: e.clientY };
+  });
+  cv.addEventListener('wheel', function (e) {
+    e.preventDefault();
+    dist = Math.max(1.7, Math.min(6.0, dist + (e.deltaY > 0 ? 0.18 : -0.18)));
+  }, { passive: false });
+  cv.addEventListener('dblclick', function () { yaw = 0.6; pitch = 0.22; dist = 3.0; });
+
+  btn.addEventListener('click', function () { on ? stop() : start(); });
+  var x = document.getElementById('brainviz-close');
+  if (x) x.addEventListener('click', stop);
+  document.addEventListener('visibilitychange', function () { if (document.hidden && on) stop(); });
+})();
+</script>

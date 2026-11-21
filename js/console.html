@@ -1,0 +1,104 @@
+<!doctype html>
+<meta charset="utf-8">
+
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:#08090b; color:#cfd2d8;
+    font:12px/1.7 "JetBrains Mono",Consolas,"Microsoft YaHei",monospace;
+    overflow:hidden; letter-spacing:.5px; }
+  ::-webkit-scrollbar { width:0; height:0; display:none; }
+
+  #halo { position:fixed; inset:0; width:100%; height:100%; display:block; }
+
+  /* 底部运行日志：半透明条，悬浮在光环之下（光环中心偏上，底部留给日志） */
+  #logbar {
+    position:fixed; left:0; right:0; bottom:0; z-index:2;
+    height:148px; padding:10px 16px;
+    background:linear-gradient(180deg, rgba(8,9,11,0) 0%, rgba(8,9,11,.88) 26%, rgba(8,9,11,.96) 100%);
+    pointer-events:none; display:flex; flex-direction:column;
+  }
+  #status {
+    display:flex; align-items:center; gap:16px; padding-bottom:6px;
+    border-bottom:1px solid rgba(60,66,74,.5);
+    font-size:11px; letter-spacing:2px; color:#6b6f78; pointer-events:auto;
+  }
+  .dot { width:7px; height:7px; border-radius:50%; background:#3a3e46; display:inline-block; }
+  .dot.on { background:#98e0cf; box-shadow:0 0 8px rgba(152,224,207,.7); }
+  .dot.off { background:#e06a6a; box-shadow:0 0 8px rgba(224,106,106,.6); }
+  .val { color:#cfd2d8; }
+  #logbox { flex:1; overflow:hidden; margin-top:6px; }
+  #logbox .line { white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    font-size:11px; line-height:1.55; color:#6b6f78; }
+  #logbox .line.neuro { color:#b8c4cc; }
+  #logbox .line.err  { color:#e06a6a; }
+  #logbox .line.cmd  { color:#f0a6c6; }
+</style>
+<canvas id="halo"></canvas>
+<div id="logbar">
+  <div id="status">
+    <span class="dot" id="d1"></span><span class="tag">BACKEND</span><span class="val" id="s1">--</span>
+    <span class="dot" id="d2"></span><span class="tag">VISION</span><span class="val" id="s2">--</span>
+    <span class="tag">FRAMES</span><span class="val" id="s3">--</span>
+    <span style="flex:1"></span>
+    <span class="val" id="clock">--</span>
+  </div>
+  <div id="logbox"></div>
+</div>
+
+<script>
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function lineClass(s){
+  if (/^\[.*\] user:/.test(s)) return 'user';
+  if (/^\[.*\] neuro:/.test(s)) return 'neuro';
+  if (/error|失败|异常|Error|Traceback/i.test(s)) return 'err';
+  return '';
+}
+var __lastLogSig = null;
+function __renderLog(diag){
+  // 只显示最近若干条系统日志（底部日志区）
+  var lines = (diag || []).slice(-8);
+  var sig = lines.join('\n');
+  if (__lastLogSig === sig) return;
+  __lastLogSig = sig;
+  var box = document.getElementById('logbox');
+  box.innerHTML = lines.map(function(l){
+    return '<div class="line '+lineClass(l)+'">'+esc(l)+'</div>';
+  }).join('');
+}
+
+function __bootHalo(){
+  if (window.__haloEngine && window.__haloEngine.init) {
+    window.__haloEngine.init('halo');
+  }
+}
+window.addEventListener('DOMContentLoaded', __bootHalo);
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  __bootHalo();
+}
+
+window.__render = function(p){
+  p = p || {};
+  // 光环状态联动
+  if (window.__haloEngine) {
+    var tts = p.tts;
+    window.__haloEngine.setState({
+      backend: !!p.backend,
+      ttsPlaying: !!(tts && (tts.playing || tts.speaking)),
+      pulse: false
+    });
+  }
+  // 状态栏
+  var b = document.getElementById('d1'), v = document.getElementById('d2');
+  b.className = 'dot ' + (p.backend ? 'on' : 'off');
+  v.className = 'dot ' + (p.vision ? 'on' : 'off');
+  document.getElementById('s1').textContent = p.backend ? '6006 online' : 'offline';
+  document.getElementById('s2').textContent = p.vision ? 'watching' : 'idle';
+  document.getElementById('s3').textContent = (p.frames == null ? '--' : p.frames)
+      + ' / ' + (p.observations == null ? '--' : p.observations);
+  document.getElementById('clock').textContent = p.time || '';
+  // 底部日志
+  __renderLog(p.diag);
+};
+
+window.__bindControls = function(){};
+</script>

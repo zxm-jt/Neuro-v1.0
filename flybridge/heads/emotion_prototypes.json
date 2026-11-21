@@ -1,0 +1,170 @@
+{
+    "angry":  {
+                  "valence":  -0.6,
+                  "arousal":  0.8,
+                  "tension":  0.8,
+                  "satiety":  0
+              },
+    "love":  {
+                 "valence":  0.8,
+                 "arousal":  0.1,
+                 "tension":  -0.3,
+                 "satiety":  0.3
+             },
+    "thoughtful":  {
+                       "valence":  0,
+                       "arousal":  -0.1,
+                       "tension":  0.1,
+                       "satiety":  0
+                   },
+    "confused":  {
+                     "valence":  -0.2,
+                     "arousal":  0.3,
+                     "tension":  0.4,
+                     "satiety":  0
+                 },
+    "gentle_smile":  {
+                         "valence":  0.5,
+                         "arousal":  -0.2,
+                         "tension":  -0.3,
+                         "satiety":  0.2
+                     },
+    "happy":  {
+                  "valence":  0.7,
+                  "arousal":  0.4,
+                  "tension":  -0.2,
+                  "satiety":  0.3
+              },
+    "smile":  {
+                  "valence":  0.5,
+                  "arousal":  0.1,
+                  "tension":  -0.1,
+                  "satiety":  0.2
+              },
+    "worried":  {
+                    "valence":  -0.5,
+                    "arousal":  0.4,
+                    "tension":  0.6,
+                    "satiety":  0
+                },
+    "sad":  {
+                "valence":  -0.7,
+                "arousal":  -0.6,
+                "tension":  0.3,
+                "satiety":  0
+            },
+    "mad":  {
+                "valence":  -0.7,
+                "arousal":  0.9,
+                "tension":  0.9,
+                "satiety":  0
+            },
+    "curious":  {
+                    "valence":  0.3,
+                    "arousal":  0.5,
+                    "tension":  0,
+                    "satiety":  0
+                },
+    "neutral":  {
+                    "valence":  0,
+                    "arousal":  0,
+                    "tension":  0,
+                    "satiety":  0
+                },
+    "smug":  {
+                 "valence":  0.4,
+                 "arousal":  0.3,
+                 "tension":  -0.1,
+                 "satiety":  0.3
+             },
+    "joy":  {
+                "valence":  0.8,
+                "arousal":  0.6,
+                "tension":  -0.3,
+                "satiety":  0.3
+            },
+    "shy":  {
+                "valence":  0.3,
+                "arousal":  0.5,
+                "tension":  0.4,
+                "satiety":  0
+            },
+    "concerned":  {
+                      "valence":  -0.4,
+                      "arousal":  0.2,
+                      "tension":  0.5,
+                      "satiety":  0
+                  },
+    "annoyed":  {
+                    "valence":  -0.4,
+                    "arousal":  0.4,
+                    "tension":  0.6,
+                    "satiety":  0
+                },
+    "jealous":  {
+                    "valence":  -0.3,
+                    "arousal":  0.4,
+                    "tension":  0.5,
+                    "satiety":  0
+                },
+    "playful":  {
+                    "valence":  0.6,
+                    "arousal":  0.6,
+                    "tension":  -0.1,
+                    "satiety":  0.2
+                },
+    "blush":  {
+                  "valence":  0.4,
+                  "arousal":  0.5,
+                  "tension":  0.3,
+                  "satiety":  0
+              },
+    "starry_eyes":  {
+                        "valence":  0.8,
+                        "arousal":  0.8,
+                        "tension":  -0.2,
+                        "satiety":  0.2
+                    },
+    "cry":  {
+                "valence":  -0.8,
+                "arousal":  -0.4,
+                "tension":  0.5,
+                "satiety":  0
+            },
+    "shock":  {
+                  "valence":  -0.3,
+                  "arousal":  0.95,
+                  "tension":  0.6,
+                  "satiety":  0
+              },
+    "bored":  {
+                  "valence":  -0.3,
+                  "arousal":  -0.6,
+                  "tension":  0,
+                  "satiety":  0
+              },
+    "look_down":  {
+                      "valence":  -0.1,
+                      "arousal":  -0.2,
+                      "tension":  0.3,
+                      "satiety":  0
+                  },
+    "excited":  {
+                    "valence":  0.7,
+                    "arousal":  0.9,
+                    "tension":  0.1,
+                    "satiety":  0.1
+                },
+    "surprised":  {
+                      "valence":  0.1,
+                      "arousal":  0.9,
+                      "tension":  0.3,
+                      "satiety":  0
+                  },
+    "thinking":  {
+                     "valence":  0,
+                     "arousal":  0,
+                     "tension":  0.2,
+                     "satiety":  0
+                 }
+}

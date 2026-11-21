@@ -1,0 +1,270 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "$description": "Neuro 桌宠 · 语音交互状态可视化 Design Tokens。四层架构：primitive → semantic → component。前端通过 import 引用，禁止在组件内写裸色值。",
+  "$meta": {
+    "project": "Neuro 桌面宠物（Electron + Live2D）",
+    "designer": "颜好看",
+    "version": "1.0.0",
+    "date": "2026-11-04",
+    "register": "Product（桌宠 UI，设计服务交互状态，不服务营销）",
+    "platform": "web (Electron 透明无边框覆盖层)",
+    "axes": { "designVariance": 4, "motionIntensity": 6, "visualDensity": 2 },
+    "iconLibrary": "lucide",
+    "iconSizes": [16, 20, 24]
+  },
+
+  "primitive": {
+    "pink": {
+      "100": { "value": "#FFE4EF", "type": "color" },
+      "300": { "value": "#FFB3D1", "type": "color" },
+      "500": { "value": "#FF6FA8", "type": "color", "comment": "状态环主用（比 600 略降饱和，叠在任意桌面背景上不刺眼）" },
+      "600": { "value": "#FF5FA2", "type": "color", "comment": "现有品牌色，保留为字幕描边" },
+      "700": { "value": "#E14E8B", "type": "color" }
+    },
+    "ink": {
+      "900": { "value": "#14141C", "type": "color", "comment": "覆盖层底：与现有 rgba(20,20,28) 对齐，取不透明等价色" },
+      "800": { "value": "#1E1E28", "type": "color" },
+      "700": { "value": "#2A2A36", "type": "color" }
+    },
+    "gray": {
+      "500": { "value": "#8A8F98", "type": "color" },
+      "600": { "value": "#62666D", "type": "color" }
+    },
+    "white": {
+      "pure": { "value": "#FFFFFF", "type": "color" },
+      "soft": { "value": "#F5F6F8", "type": "color" }
+    },
+    "hue": {
+      "mint": { "value": "#5AD1C8", "type": "color" },
+      "apricot": { "value": "#FFB072", "type": "color" },
+      "coral": { "value": "#FF7A6B", "type": "color" },
+      "skygray": { "value": "#6FA8DC", "type": "color" }
+    }
+  },
+
+  "semantic": {
+    "color": {
+      "bg": { "value": "transparent", "type": "color", "comment": "桌面覆盖层：背景必须透明，不遮挡桌面" },
+      "surface": { "value": "{primitive.ink.900}", "type": "color", "comment": "悬浮控件底（输入条/状态胶囊）" },
+      "surface-soft": { "value": "{primitive.ink.800}", "type": "color" },
+      "fg": { "value": "{primitive.white.pure}", "type": "color" },
+      "fg-2": { "value": "rgba(255,255,255,0.72)", "type": "color" },
+      "muted": { "value": "{primitive.gray.500}", "type": "color" },
+      "meta": { "value": "{primitive.gray.600}", "type": "color" },
+      "border": { "value": "rgba(255,255,255,0.18)", "type": "color" },
+      "border-soft": { "value": "rgba(255,255,255,0.08)", "type": "color" },
+      "accent": { "value": "{primitive.pink.500}", "type": "color" },
+      "accent-strong": { "value": "{primitive.pink.600}", "type": "color" },
+      "accent-on": { "value": "{primitive.white.pure}", "type": "color" },
+      "accent-hover": { "value": "{primitive.pink.300}", "type": "color" },
+      "success": { "value": "#16A34A", "type": "color" },
+      "warn": { "value": "#D97706", "type": "color" },
+      "danger": { "value": "#DC2626", "type": "color" },
+      "link": { "value": "{primitive.hue.skygray}", "type": "color", "comment": "手机通道色：连接/同步/新项指示；复用雾蓝，与状态环粉/杏黄互斥不冲突" },
+      "link-soft": { "value": "rgba(111,168,220,0.14)", "type": "color", "comment": "面板分区底 / 新到达高亮底" },
+      "panel-surface": { "value": "{primitive.ink.800}", "type": "color", "comment": "同步面板底（实心，不毛玻璃；透明窗口下 backdrop-filter 失效）" },
+      "panel-surface-raised": { "value": "{primitive.ink.700}", "type": "color", "comment": "面板卡片底" },
+      "link-active": { "value": "{primitive.hue.skygray}", "type": "color", "comment": "bot 在线/通道正常（对应 token-status-link-active）" },
+      "link-idle": { "value": "{primitive.gray.500}", "type": "color", "comment": "通道离线 bot_status=down（对应 token-status-link-idle），灰" },
+      "link-syncing": { "value": "{primitive.hue.skygray}", "type": "color", "comment": "同步中（脉冲）" }
+    },
+    "state": {
+      "$comment": "语音交互状态语义色。互斥——同一时刻屏幕上只有一个状态环可见，因此不违反『每屏≤2处强调色』。",
+      "idle": { "value": "{primitive.pink.300}", "type": "color", "comment": "待机/呼吸环，30% 不透明度" },
+      "listening": { "value": "{primitive.hue.mint}", "type": "color", "comment": "聆听：弧线由内向外填充，随你音量起伏" },
+      "thinking": { "value": "{primitive.hue.apricot}", "type": "color", "comment": "思考：虚线弧缓慢旋转" },
+      "speaking": { "value": "{primitive.pink.500}", "type": "color", "comment": "说话：圆环向外扩散脉冲" },
+      "interrupted": { "value": "{primitive.hue.coral}", "type": "color", "comment": "被打断：弧线断成三段并向外消散（中断回执）" },
+      "muted": { "value": "{primitive.gray.500}", "type": "color", "comment": "没听见/静音：环轨道上叠一条斜杠" },
+      "vision": { "value": "{primitive.hue.skygray}", "type": "color", "comment": "连续屏幕感知：屏幕四角 2px 角括号 + 环上雷达扫光" },
+      "failed": { "value": "#DC2626", "type": "color", "comment": "F6 指令执行失败态（三态之失败）；实线环 + 轻微抖动，区别于 interrupted 断弧；复用 danger 语义" },
+      "ring-underlay": { "value": "rgba(0,0,0,0.55)", "type": "color", "comment": "状态环底下 1px 暗描边，保证浅色桌面上仍可辨识" }
+    },
+    "font": {
+      "family-display": { "value": "'NeuroSub', 'NeuroSubCJK', 'SIMYOU', '幼圆', 'Microsoft YaHei', sans-serif", "type": "fontFamily", "comment": "Shantell Sans 700 手写体；桌宠人格声线，仅用于字幕" },
+      "family-ui": { "value": "'NeuroSubBaloo', 'NeuroSubCJK', 'Microsoft YaHei', sans-serif", "type": "fontFamily", "comment": "Baloo 2 圆润几何体 + 幼圆 CJK 子集；状态标签/胶囊/设置项" },
+      "family-mono": { "value": "ui-monospace, 'Cascadia Mono', 'Consolas', monospace", "type": "fontFamily", "comment": "仅用于页码/计时等数字，tabular-nums" }
+    },
+    "text": {
+      "xs": { "value": "11px", "type": "dimension", "comment": "状态胶囊文字（配 0.06em 字距）" },
+      "sm": { "value": "12px", "type": "dimension", "comment": "页码指示" },
+      "md": { "value": "14px", "type": "dimension", "comment": "输入框 / 按钮" },
+      "lg": { "value": "18px", "type": "dimension", "comment": "字幕正文（保持现有值）" },
+      "xl": { "value": "22px", "type": "dimension" },
+      "2xl": { "value": "28px", "type": "dimension" }
+    },
+    "leading": {
+      "tight": { "value": "1.05", "type": "number", "comment": "字幕行距（现有值，用户要求行距小）" },
+      "body": { "value": "1.5", "type": "number" },
+      "chip": { "value": "1.0", "type": "number" }
+    },
+    "space": {
+      "1": { "value": "4px", "type": "dimension" },
+      "2": { "value": "8px", "type": "dimension" },
+      "3": { "value": "12px", "type": "dimension" },
+      "4": { "value": "16px", "type": "dimension" },
+      "5": { "value": "20px", "type": "dimension" },
+      "6": { "value": "24px", "type": "dimension" },
+      "8": { "value": "32px", "type": "dimension" },
+      "10": { "value": "40px", "type": "dimension" },
+      "12": { "value": "48px", "type": "dimension" }
+    },
+    "radius": {
+      "sm": { "value": "8px", "type": "dimension" },
+      "md": { "value": "12px", "type": "dimension", "comment": "字幕容器" },
+      "lg": { "value": "16px", "type": "dimension" },
+      "pill": { "value": "9999px", "type": "dimension", "comment": "状态胶囊 / 输入条（替换现有 22px 非标值）" }
+    },
+    "elevation": {
+      "flat": { "value": "none", "type": "shadow" },
+      "ring": { "value": "0 0 0 1px rgba(255,255,255,0.10)", "type": "shadow" },
+      "raised": { "value": "0 4px 18px rgba(0,0,0,0.45)", "type": "shadow", "comment": "沿用现有输入条阴影" }
+    },
+    "motion": {
+      "instant": { "value": "90ms", "type": "duration", "comment": "按下/开关" },
+      "fast": { "value": "150ms", "type": "duration", "comment": "跨系统收敛值：hover/状态切换" },
+      "base": { "value": "220ms", "type": "duration", "comment": "打断回执、状态胶囊进出" },
+      "slow": { "value": "320ms", "type": "duration", "comment": "跨态过渡上限" },
+      "breathe": { "value": "4000ms", "type": "duration", "comment": "待机呼吸环周期" },
+      "ease-standard": { "value": "cubic-bezier(0.2, 0, 0, 1)", "type": "cubicBezier" },
+      "ease-out": { "value": "cubic-bezier(0.16, 1, 0.3, 1)", "type": "cubicBezier" },
+      "ease-receipt": { "value": "cubic-bezier(0.34, 0.6, 0.4, 1)", "type": "cubicBezier", "comment": "打断回执专用：先快后缓，收得干净" }
+    },
+    "focus": {
+      "ring": { "value": "0 0 0 3px rgba(255,111,168,0.55)", "type": "shadow" },
+      "offset": { "value": "2px", "type": "dimension" }
+    },
+    "layout": {
+      "safe-gutter": { "value": "24px", "type": "dimension", "comment": "距屏幕右/下边距" },
+      "subtitle-width": { "value": "44vw", "type": "dimension" },
+      "subtitle-maxheight": { "value": "62vh", "type": "dimension", "comment": "7 行 × 18px 上限，避免盖住角色的脸" }
+    },
+    "component": {
+      "ring": {
+        "size": { "value": "180px", "type": "dimension", "comment": "状态环外径，锚定在角色胸口下方" },
+        "strokeWidth": { "value": "3px", "type": "dimension" },
+        "trackWidth": { "value": "1px", "type": "dimension" },
+        "anchorOffsetY": { "value": "-6vh", "type": "dimension", "comment": "环心相对角色底部的偏移" }
+      },
+      "subtitle": {
+        "stroke": { "value": "{primitive.pink.600}", "type": "color" },
+        "strokeWidth": { "value": "0.6px", "type": "dimension" },
+        "stateGlyphSize": { "value": "24px", "type": "dimension" },
+        "stateGlyphGap": { "value": "8px", "type": "dimension" }
+      },
+      "chip": {
+        "paddingX": { "value": "12px", "type": "dimension" },
+        "paddingY": { "value": "4px", "type": "dimension" },
+        "radius": { "value": "{radius.pill}", "type": "dimension" },
+        "iconSize": { "value": "16px", "type": "dimension" }
+      },
+      "cornerBracket": {
+        "size": { "value": "28px", "type": "dimension", "comment": "屏幕四角角括号边长" },
+        "thickness": { "value": "2px", "type": "dimension" },
+        "inset": { "value": "10px", "type": "dimension" },
+        "opacity": { "value": "0.28", "type": "number" }
+      }
+    }
+  },
+
+  "component": {
+    "state-ring": {
+      "idle": { "color": "{semantic.state.idle}", "opacity": 0.3, "dash": "none", "motion": "breathe" },
+      "listening": { "color": "{semantic.state.listening}", "opacity": 1, "dash": "none", "motion": "amplitude-fill" },
+      "thinking": { "color": "{semantic.state.thinking}", "opacity": 1, "dash": "6 10", "motion": "rotate 1.6s linear infinite" },
+      "speaking": { "color": "{semantic.state.speaking}", "opacity": 1, "dash": "none", "motion": "pulse-outward 900ms ease-out infinite" },
+      "interrupted": { "color": "{semantic.state.interrupted}", "opacity": 1, "dash": "none", "motion": "receipt-collapse 220ms once" },
+      "muted": { "color": "{semantic.state.muted}", "opacity": 0.9, "dash": "none", "motion": "static + slash-overlay" },
+      "vision": { "color": "{semantic.state.vision}", "opacity": 0.85, "dash": "none", "motion": "radar-sweep 3.2s linear infinite" }
+    },
+    "chip": {
+      "bg": "{semantic.color.surface}",
+      "fg": "{semantic.color.fg}",
+      "border": "{semantic.color.border}",
+      "iconSize": "16px",
+      "font": "{semantic.font.family-ui}",
+      "fontSize": "{semantic.text.xs}",
+      "letterSpacing": "0.06em"
+    },
+    "subtitle": {
+      "font": "{semantic.font.family-display}",
+      "fontSize": "{semantic.text.lg}",
+      "lineHeight": "{semantic.leading.tight}",
+      "letterSpacing": "-0.02em",
+      "color": "{semantic.color.fg}",
+      "stroke": "{semantic.color.accent-strong}",
+      "containerRadius": "{semantic.radius.md}"
+    },
+    "input-bar": {
+      "bg": "{semantic.color.surface}",
+      "border": "{semantic.color.border}",
+      "radius": "{semantic.radius.pill}",
+      "shadow": "{semantic.elevation.raised}",
+      "gap": "{semantic.space.2}",
+      "paddingX": "{semantic.space.4}",
+      "paddingY": "{semantic.space.1}",
+      "placeholder": "rgba(255,255,255,0.45)"
+    },
+    "icon": {
+      "library": "lucide",
+      "strokeWidth": 2,
+      "strokeLinecap": "round",
+      "strokeLinejoin": "round",
+      "map": {
+        "listening": "mic",
+        "hearing": "audio-lines",
+        "thinking": "loader-circle",
+        "speaking": "volume-2",
+        "interrupted": "unlink",
+        "muted": "mic-off",
+        "vision": "scan-eye",
+        "barge-in-armed": "hand",
+        "send": "send-horizontal",
+        "dismiss": "x",
+        "confirm": "check",
+        "phone-pair": "qr-code",
+        "phone-connected": "link",
+        "phone-disconnected": "wifi-off",
+        "phone-syncing": "refresh-cw",
+        "synced-message": "message-square-text",
+        "sms": "message-square",
+        "remote-command": "terminal",
+        "web-search": "search",
+        "file-received": "file-down",
+        "mark-read": "check-check",
+        "reply": "corner-down-left",
+        "copy": "copy",
+        "open-ext": "external-link"
+      }
+    },
+    "linkPanel": {
+      "surface": "{semantic.color.panel-surface}",
+      "surfaceRaised": "{semantic.color.panel-surface-raised}",
+      "width": { "value": "320px", "type": "dimension", "comment": "展开宽" },
+      "widthCollapsed": { "value": "56px", "type": "dimension", "comment": "收起为细轨（仅未读角标）" },
+      "radius": "{semantic.radius.lg}",
+      "cardRadius": "{semantic.radius.md}",
+      "gutter": "{semantic.layout.safe-gutter}",
+      "shadow": "{semantic.elevation.raised}",
+      "headerH": { "value": "44px", "type": "dimension" },
+      "cardPadX": "{semantic.space.3}",
+      "cardPadY": "{semantic.space.2}",
+      "iconSize": "16px",
+      "font": "{semantic.font.family-ui}",
+      "fontSize": "{semantic.text.md}",
+      "channelColor": "{semantic.color.link}",
+      "newItemBg": "{semantic.color.link-soft}"
+    },
+    "linkCapsule": {
+      "bg": "{semantic.color.surface}",
+      "fg": "{semantic.color.fg-2}",
+      "border": "{semantic.color.border}",
+      "iconColor": "{semantic.color.link}",
+      "iconSize": "16px",
+      "radius": "{semantic.radius.pill}",
+      "font": "{semantic.font.family-ui}",
+      "fontSize": "{semantic.text.xs}",
+      "letterSpacing": "0.06em"
+    }
+  }
+}

@@ -1,0 +1,151 @@
+:root {
+
+  --pink-100: #FFE4EF;
+  --pink-300: #FFB3D1;
+  --pink-500: #FF6FA8;
+  --pink-600: #FF5FA2;
+  --pink-700: #E14E8B;
+
+  --ink-900: #14141C;
+  --ink-800: #1E1E28;
+  --ink-700: #2A2A36;
+
+  --gray-500: #8A8F98;
+  --gray-600: #62666D;
+
+  --white-soft: #F5F6F8;
+
+  --mint: #5AD1C8;
+  --apricot: #FFB072;
+  --coral: #FF7A6B;
+  --skygray: #6FA8DC;
+
+  --bg: transparent;
+  --surface: var(--ink-900);
+  --surface-soft: var(--ink-800);
+  --fg: #fff;
+  --fg-2: rgba(255, 255, 255, 0.72);
+  --muted: var(--gray-500);
+  --meta: var(--gray-600);
+  --border: rgba(255, 255, 255, 0.18);
+  --border-soft: rgba(255, 255, 255, 0.08);
+
+  --accent: var(--pink-500);
+  --accent-strong: var(--pink-600);
+  --accent-on: #fff;
+  --accent-hover: var(--pink-300);
+
+  --success: #16A34A;
+  --warn: #D97706;
+  --danger: #DC2626;
+
+  --state-idle: var(--pink-300);
+  --state-listening: var(--mint);
+  --state-thinking: var(--apricot);
+  --state-speaking: var(--pink-500);
+  --state-interrupted: var(--coral);
+  --state-muted: var(--gray-500);
+  --state-vision: var(--skygray);
+  --state-ring-underlay: rgba(0, 0, 0, 0.55);
+
+  --font-display: 'NeuroSub', 'NeuroSubCJK', 'SIMYOU', '幼圆', 'Microsoft YaHei', sans-serif;
+  --font-ui: 'NeuroSubBaloo', 'NeuroSubCJK', 'Microsoft YaHei', sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Mono', 'Consolas', monospace;
+
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-md: 14px;
+  --text-lg: 18px;
+  --text-xl: 22px;
+  --text-2xl: 28px;
+
+  --leading-tight: 1.05;
+  --leading-body: 1.5;
+  --leading-chip: 1.0;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-pill: 9999px;
+
+  --elev-flat: none;
+  --elev-ring: 0 0 0 1px rgba(255, 255, 255, 0.10);
+  --elev-raised: 0 4px 18px rgba(0, 0, 0, 0.45);
+
+  --motion-instant: 90ms;
+  --motion-fast: 150ms;
+  --motion-base: 220ms;
+  --motion-slow: 320ms;
+  --motion-breathe: 4000ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-receipt: cubic-bezier(0.34, 0.6, 0.4, 1);
+
+  --focus-ring: 0 0 0 3px rgba(255, 111, 168, 0.55);
+  --focus-offset: 2px;
+
+  --safe-gutter: 24px;
+  --subtitle-width: 44vw;
+  --subtitle-maxheight: 62vh;
+
+  --ring-size: 180px;
+  --ring-stroke: 3px;
+  --ring-track: 1px;
+  --ring-anchor-y: -6vh;
+  --chip-radius: var(--radius-pill);
+  --chip-pad-x: var(--space-3);
+  --chip-pad-y: var(--space-1);
+  --bracket-size: 28px;
+  --bracket-thickness: 2px;
+  --bracket-inset: 10px;
+  --bracket-opacity: 0.28;
+
+  --link: var(--skygray);
+  --link-soft: rgba(111, 168, 220, 0.14);
+  --panel-surface: var(--ink-800);
+  --panel-surface-raised: var(--ink-700);
+  --panel-width: 320px;
+  --panel-width-collapsed: 56px;
+  --panel-gutter: var(--safe-gutter);
+
+  --link-active: var(--skygray);
+  --link-idle: var(--gray-500);
+  --link-syncing: var(--skygray);
+  --state-failed: var(--danger);
+}
+
+body[data-state="idle"]        { --state-current: var(--state-idle);        --state-opacity: 0.30; }
+body[data-state="listening"]   { --state-current: var(--state-listening);   --state-opacity: 1;    }
+body[data-state="thinking"]    { --state-current: var(--state-thinking);    --state-opacity: 1;    }
+body[data-state="speaking"]    { --state-current: var(--state-speaking);    --state-opacity: 1;    }
+body[data-state="interrupted"] { --state-current: var(--state-interrupted); --state-opacity: 1;    }
+body[data-state="muted"]       { --state-current: var(--state-muted);       --state-opacity: 0.9;  }
+body[data-state="vision"]      { --state-current: var(--state-vision);      --state-opacity: 0.85; }
+body[data-state="failed"]       { --state-current: var(--state-failed);      --state-opacity: 1; }
+
+body[data-link="online"]   { --link-current: var(--link-active); }
+body[data-link="syncing"]  { --link-current: var(--link-syncing); }
+body[data-link="offline"]  { --link-current: var(--link-idle); }
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-instant: 1ms;
+    --motion-fast: 1ms;
+    --motion-base: 1ms;
+    --motion-slow: 1ms;
+    --motion-breathe: 1ms;
+  }
+  .state-ring__sweep,
+  .state-ring__pulse,
+  .state-bracket { animation: none !important; }
+}
