@@ -2065,8 +2065,8 @@ def strip_tool_markers(text):
     return out
 
 
-_EMO_TAG = re.compile(r'[\[【]\s*[A-Za-z0-9_\u4e00-\u9fff \-]{1,40}?\s*[\]】]')
-_EMO_TAG_CAP = re.compile(r'[\[【]\s*([A-Za-z0-9_\u4e00-\u9fff \-]{1,40}?)\s*[\]】]')
+_EMO_TAG = re.compile(r"[\[【]\s*[A-Za-z0-9_\u4e00-\u9fff ,''\-]{1,40}?\s*[\]】]")
+_EMO_TAG_CAP = re.compile(r"[\[【]\s*([A-Za-z0-9_\u4e00-\u9fff ,''\-]{1,40}?)\s*[\]】]")
 
 
 def strip_emotion_tags(text):
@@ -2197,7 +2197,7 @@ _EMO_RULES = [
                  r"|无聊|没劲|没意思|提不起劲"),
 ]
 _EMO_RULES = [(name, re.compile(pat, re.IGNORECASE)) for name, pat in _EMO_RULES]
-_LEADING_TAG = re.compile(r'^\s*[\[【]\s*([A-Za-z0-9_\u4e00-\u9fff \-]{1,40}?)\s*[\]】]')
+_LEADING_TAG = re.compile(r"^\s*[\[【]\s*([A-Za-z0-9_\u4e00-\u9fff ,''\-]{1,40}?)\s*[\]】]")
 
 _EMO_ALIAS = {
     "cheerful": "happy", "gladly": "happy", "happiness": "happy", "glad": "happy",

@@ -1,8 +1,8 @@
 const { normalizeEmotionKey } = require('./emotion-keys.js');
 const EmotionClassifier = require('./emotion-classifier.js');
-const EMO_TAG_RE = /[\[【]\s*[A-Za-z0-9_\u4e00-\u9fff \-\u2010-\u2015]{1,40}?\s*[\]】]/g;
+const EMO_TAG_RE = /[\[【]\s*[A-Za-z0-9_\u4e00-\u9fff ,''\-\u2010-\u2015]{1,40}?\s*[\]】]/g;
 
-const EMO_OPEN_TAIL = /[\[【]\s*[A-Za-z0-9_\u4e00-\u9fff \-]{0,40}$/;
+const EMO_OPEN_TAIL = /[\[【]\s*[A-Za-z0-9_\u4e00-\u9fff ,''\-]{0,40}$/;
 
 const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{3030}\u{303D}\u{2049}\u{203C}]/gu;
 
@@ -245,6 +245,7 @@ class EnhancedTextProcessor {
         if (this._playTimer) return;
         const playNextAudio = async () => {
             if (this.shouldStop) { this._playTimer = null; return; }
+            try {
 
             if (this.audioDataQueue.length > 0 && !this._audioPlaying) {
                 const audioPackage = this.audioDataQueue.shift();
@@ -284,10 +285,46 @@ class EnhancedTextProcessor {
                 this.currentSegmentEmotion = audioPackage.emotion;
                 if (audioPackage.emotion) this.setEmotion(audioPackage.emotion);
 
-                await this.playAudioWithTextSync(audioPackage.audio);
+                // [2026-11-22 fix - playback loop must not die]
+                // This line used to have NO try/catch. Any throw inside
+                // playAudioWithTextSync rejects the whole playNextAudio, so the
+                // `this._playTimer = setTimeout(playNextAudio, 16)` line below is
+                // never reached -> the WHOLE playback thread dies and every later
+                // segment stays silent ("she cannot speak").
+                // The TDZ bug introduced by the 2026-11-22 subtitle-stutter fix
+                // (now() used before it was defined) killed the loop exactly this way.
+                // Now: one bad segment is skipped, the loop keeps going, and the
+                // reschedule moved into `finally` so it always happens.
+                try {
+                    await this.playAudioWithTextSync(audioPackage.audio);
+                } catch (e) {
+                    console.error('[tts] playback of one segment failed (skipped, loop continues):', e);
+                    try {
+                        if (this._subSyncRAF) { cancelAnimationFrame(this._subSyncRAF); this._subSyncRAF = null; }
+                        this.currentAudio = null;
+                        this._audioPlaying = false;
+                        this._fireEnd && this._fireEnd();
+                    } catch (_e2) { /* ignore */ }
+                }
+            }   // end of if (audioDataQueue.length > 0 && !this._audioPlaying)
+            } catch (e) {
+                // [2026-11-22 fix - playback loop must not die]
+                // This layer catches anything else thrown during a round.
+                // Before there was no catch at all, so any error turned
+                // playNextAudio into an unhandled rejection and the playback
+                // thread went silent for good ("she suddenly stops talking").
+                // Now it is logged and swallowed: the loop keeps running.
+                console.error('[tts] playback round threw (ignored, loop continues):', e);
+            } finally {
+                // [2026-11-22 fix - playback loop must not die]
+                // Reschedule inside `finally`: no matter what blew up this round,
+                // the next tick is always queued, so the loop cannot stall.
+                if (!this.shouldStop) {
+                    this._playTimer = setTimeout(playNextAudio, 16);
+                } else {
+                    this._playTimer = null;
+                }
             }
-
-            this._playTimer = setTimeout(playNextAudio, 16);
         };
 
         this._playTimer = setTimeout(playNextAudio, 16);
@@ -572,13 +609,27 @@ class EnhancedTextProcessor {
                 _durExact = tl.exact;
             }
             
+            // [2026-11-22 fix - TDZ fatal bug] now() must be DEFINED BEFORE USE.
+            // The old order was: `let _lastSmoothAt = now();` first, and only later
+            // `const now = ...`. const has a temporal dead zone, so every single
+            // entry into this function threw
+            //   ReferenceError: Cannot access 'now' before initialization
+            // The throw happens BEFORE this segment's audio.play(), so the audio
+            // never even starts; and the error escapes all the way into
+            // startPlaybackThread's playNextAudio (no try/catch there), so the line
+            // `this._playTimer = setTimeout(playNextAudio, 16)` is never reached
+            // -> the WHOLE playback loop dies and every later segment stays silent.
+            // Symptom: "she cannot speak" + "subtitle arrives as one whole sentence"
+            // (the reveal loop never started).
+            // Move the definition ahead of its first use.
+            const now = (typeof performance !== 'undefined' && performance.now)
+                ? () => performance.now() : () => Date.now();
+
             let _lastSmoothCt = -1;
             let _lastSmoothAt = now();
 
             let _lastCt = -1;
             let _ctStallSince = 0;
-            const now = (typeof performance !== 'undefined' && performance.now)
-                ? () => performance.now() : () => Date.now();
 
             const revealUpTo = (n) => {
                 if (_myToken !== this._segToken) return;
