@@ -371,8 +371,13 @@ def log_chat(kind, text):
         with open(_CHAT_LOG, "r", encoding="utf-8", errors="ignore") as f:
             _lines = f.readlines()
         if len(_lines) > MAX_CHAT_LOG_LINES:
+            # 【2026-11-22 修 · 聊天房整屏清空】会话标记是文件的【第 1 行】，
+            # 而旧写法保留【最后 60 行】—— 一旦超过 60 行，标记必然被挤掉。
+            # 前端 buildRoomChat 找不到标记就返回空数组 → 整屏对话消失。
+            # 改成：永远保留首行标记 + 末尾 (MAX-1) 行对话。
+            _keep = list(_lines[:1]) + list(_lines[-(MAX_CHAT_LOG_LINES - 1):])
             with open(_CHAT_LOG, "w", encoding="utf-8") as f:
-                f.writelines(_lines[-MAX_CHAT_LOG_LINES:])
+                f.writelines(_keep)
     except Exception:
         pass
 
