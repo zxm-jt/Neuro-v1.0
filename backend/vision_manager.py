@@ -208,8 +208,34 @@ def _frame_signature(jpeg_bytes: bytes):
         return None
 
 
+def _downscale_jpeg(jpeg_bytes: bytes, max_side: int = 768) -> bytes:
+
+    if not (_HAS_PIL and jpeg_bytes):
+        return jpeg_bytes
+    try:
+        _cfg_max = int(_cfg_free("downscale_max_side", max_side) or max_side)
+        max_side = max(256, min(2048, _cfg_max))
+    except Exception:
+        pass
+    try:
+        img = Image.open(io.BytesIO(jpeg_bytes))
+        w, h = img.size
+        longest = max(w, h)
+        if longest <= max_side:
+            return jpeg_bytes
+        ratio = max_side / float(longest)
+        nw, nh = max(1, int(round(w * ratio))), max(1, int(round(h * ratio)))
+        img = img.resize((nw, nh), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=80)
+        return buf.getvalue()
+    except Exception:
+        return jpeg_bytes
+
+
 def _jpeg_to_data_url(jpeg_bytes: bytes) -> str:
 
+    jpeg_bytes = _downscale_jpeg(jpeg_bytes)
     b64 = base64.b64encode(jpeg_bytes).decode("ascii")
     return "data:image/jpeg;base64," + b64
 

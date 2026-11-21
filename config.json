@@ -82,7 +82,7 @@
     "enabled": true,
     "free": {
       "enabled": true,
-      "observation_context_window_s": 600,
+      "observation_context_window_s": 20,
       "api_url": "https://open.bigmodel.cn/api/paas/v4",
       "api_key": "",
       "model": "glm-4v-flash",
@@ -98,16 +98,18 @@
       "observation_dup_similarity": 0.82,
       "observation_dup_window_s": 45,
       "auto_push_frames": true,
-      "min_interval_s": 1.5,
+      "min_interval_s": 0.5,
       "speak_min_interval_s": 12,
       "speak_max_age_s": 20,
       "speak_max_per_hour": 8,
       "exclude_self_window": true,
       "distill": {
-        "every_n": 5,
-        "interval_s": 300
+        "every_n": 3,
+        "interval_s": 60
       },
-      "speak_enabled": false
+      "speak_enabled": false,
+      "api_timeout_s": 5,
+      "downscale_max_side": 768
     }
   },
   "ui": {
